@@ -293,7 +293,7 @@ if __name__ == "__main__":
         am.add_experiment(em.experiment)
 #    am.add_analyzer(DownloadAnalyzerTPI(['output\\DemographicsSummary.json', 'config.json', 'output\\ReportHIVART.csv', 'output\\ReportHIVByAgeAndGender.csv'],
 #                                        output_dir='Test HIV 1'))
-    am.add_analyzer(DownloadAnalyzerTPI(['..\\Output\\ReportHIVByAgeAndGender.csv'], output_dir='ReportHIVByAgeAndGender'))
+    am.add_analyzer(DownloadAnalyzerTPI(['output\\ReportHIVByAgeAndGender.csv'], output_dir='..\\Output\\ReportHIVByAgeAndGender'))
 
     # While the experiments are running, we are analyzing every 15 seconds
     while not all([em.finished() for em in experiments]):
