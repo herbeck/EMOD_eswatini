@@ -1,5 +1,6 @@
 ##################################################################################################
 #Swaziland EMOD plotting
+#Plot model output
 ##################################################################################################
 library(reshape2)
 library(plyr)
@@ -14,182 +15,55 @@ library(tidyr)
 
 options(scipen=999)
 
+#set working dir
+wd <- "C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\Calibration\\Data"
+setwd(wd)
 ###########################################################################################################
 #Bring in incidence reference data
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Data\\Swaziland_point_estimates")
-infile4 <- "Swaziland_Incidence_Data"
-incidence.data <- read.csv(paste0('./', infile4, '.csv'))
+incidence.data <- read.csv(paste0('./', "Swaziland_Incidence_Data", '.csv'))
 
 #Bring in prevalence reference data
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Data\\Swaziland_point_estimates")
-infileprev <- "SWAZILAND_nationalprevalence"
-prevalence <- read.csv(paste0('./', infileprev, '.csv'))
+prevalence <- read.csv(paste0('./', "SWAZILAND_nationalprevalence", '.csv'))
 prevalence$Age <- prevalence$start.age
-infileprev <- "SWAZILAND_nationalprevalence_bothgenders"
-prevalence.bothgenders <- read.csv(paste0('./', infileprev, '.csv'))
+prevalence.bothgenders <- read.csv(paste0('./', "SWAZILAND_nationalprevalence_bothgenders", '.csv'))
 head(prevalence.bothgenders)
 
 #Bring in ART coverage data
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Data\\Swaziland_point_estimates")
-infile1 <- "SWAZILAND_calibration_nationalARTprevalence"
-artdata <- read.csv(paste0('./', infile1, '.csv'))
+artdata <- read.csv(paste0('./', "SWAZILAND_calibration_nationalARTprevalence", '.csv'))
 artdata$Agecat <- artdata$AgeBin
 artdata$ART_coverage <- artdata$NationalARTPrevalence
 labs <- c("1" = "Women", "0" = "Men")
 
 ###########################################
-#Load scenarios
+#Stich together output files for each of 250 sims
 ###########################################
 
-#Long file
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL")
-reporthivbyageandgender.master.final <- read.csv("reporthivbyageandgender.master.final.csv")
-
-#condensed file
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL")
-reporthivbyageandgender.master <- read.csv("reporthivbyageandgender.master.final.condensed.csv")
-table(reporthivbyageandgender.master$scenario)
-table(reporthivbyageandgender.master$Agecat)
-
-###########################################
-#Scenarios
-###########################################
-
-#baseline
-setwd(paste0(wd1))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd1, files)
-length(f)
-
-for (i in seq(1,250,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "baseline"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on baseline folder",i))
-  }
-}
-
-reporthivbyageandgender.master.baseline <- reporthivbyageandgender.master
-names(reporthivbyageandgender.master.baseline)
-reporthivbyageandgender.master.baseline <- reporthivbyageandgender.master.baseline[ , -which(names(reporthivbyageandgender.master.baseline) %in% c("Newly.Tested.Positive","Newly.Tested.Negative","Tested.Past.Year.or.On_ART", "Tested.Ever","Diagnosed","NodeId","HasIntervention.Traditional_MC.","Non_Program_MMC", "Program_VMMC"))]
-
-#noARTnoVMMC
-setwd(paste0(wd2))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd2, files)
-length(f)
-
-for (i in seq(1,250,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "noARTnoVMMC"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  #reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,7,8,9,10,11,12,22,23)]
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on noARTnoVMMC folder",i))
-  }
-}
-
-reporthivbyageandgender.master.noartnovmmc <- reporthivbyageandgender.master
-names(reporthivbyageandgender.master.noartnovmmc)
-reporthivbyageandgender.master.noartnovmmc <- reporthivbyageandgender.master.noartnovmmc[ , -which(names(reporthivbyageandgender.master.noartnovmmc) %in% c("Newly.Tested.Positive","Newly.Tested.Negative","Tested.Past.Year.or.On_ART", "Tested.Ever","Diagnosed","NodeId","HasIntervention.Traditional_MC.","Non_Program_MMC", "Program_VMMC"))]
-
-#noART
-setwd(paste0(wd3))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd3, files)
-length(f)
-
-for (i in seq(1,250,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "noART"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  #reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,7,8,9,10,11,12,22,23)]
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on noART folder",i))
-  }
-}
-
-reporthivbyageandgender.master.noart <- reporthivbyageandgender.master
-names(reporthivbyageandgender.master.noart)
-reporthivbyageandgender.master.noart <- reporthivbyageandgender.master.noart[ , -which(names(reporthivbyageandgender.master.noart) %in% c("Newly.Tested.Positive","Newly.Tested.Negative","Tested.Past.Year.or.On_ART", "Tested.Ever","Diagnosed","NodeId","HasIntervention.Traditional_MC.","Non_Program_MMC", "Program_VMMC"))]
-
-#909090
-setwd(paste0(wd4))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd4, files)
-length(f)
-
-for (i in seq(1,250,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "909090"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on 909090agetarg folder",i))
-  }
-}
-
-reporthivbyageandgender.master.909090agetarg <- reporthivbyageandgender.master
-names(reporthivbyageandgender.master.909090agetarg)
-reporthivbyageandgender.master.909090agetarg <- reporthivbyageandgender.master.909090agetarg[ , -which(names(reporthivbyageandgender.master.909090agetarg) %in% c("Newly.Tested.Positive","Newly.Tested.Negative","Tested.Past.Year.or.On_ART", "Tested.Ever","Diagnosed","NodeId","HasIntervention.Traditional_MC.","Non_Program_MMC", "Program_VMMC"))]
-
-#ART100pct
-setwd(paste0(wd6))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd6, files)
-length(f)
-
-for (i in seq(1,250,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "ART100pct"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  #reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,7,8,9,10,11,12,22,23)]
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on ART100pct folder",i))
-  }
-}
-
-reporthivbyageandgender.master.ART100pct <- reporthivbyageandgender.master
-names(reporthivbyageandgender.master.ART100pct)
-reporthivbyageandgender.master.ART100pct <- reporthivbyageandgender.master.ART100pct[ , -which(names(reporthivbyageandgender.master.ART100pct) %in% c("Newly.Tested.Positive","Newly.Tested.Negative","Tested.Past.Year.or.On_ART", "Tested.Ever","Diagnosed","NodeId","HasIntervention.Traditional_MC.","Non_Program_MMC", "Program_VMMC"))]
-
-#Stitch together reporthivbyageandgender files
-reporthivbyageandgender.master.final <- rbind(reporthivbyageandgender.master.baseline,
-                                              reporthivbyageandgender.master.noartnovmmc,
-                                              reporthivbyageandgender.master.noart,
-                                              reporthivbyageandgender.master.909090agetarg,
-                                              reporthivbyageandgender.master.ART100pct)
-
-
-table(reporthivbyageandgender.master.final$scenario)
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL")
-write.csv(reporthivbyageandgender.master.final, "reporthivbyageandgender.master.final.csv")
+# #baseline
+# files <- list.files(path = '../Output/Baseline/ReportHIVByAgeAndGender', full.names = F) #list all the output files
+# f <- paste0('../Output/Baseline/ReportHIVByAgeAndGender/', files)
+# names(reporthivbyageandgender)
+# 
+# for (i in seq(1,250,1)){
+#   reporthivbyageandgender <- read.csv(paste0(f[i]))
+#   reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,11,13)]
+#   reporthivbyageandgender$scenario <- "baseline"
+#   reporthivbyageandgender$sim.id <- paste0(files[i])
+#   if (i==1){
+#     reporthivbyageandgender.master <- reporthivbyageandgender
+#   } else {
+#     reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
+#     print(paste0("I'm working on baseline folder",i))
+#   }
+# }
+# reporthivbyageandgender.master.baseline <- reporthivbyageandgender.master
+# 
+# write.csv(reporthivbyageandgender.master.baseline, "reporthivbyageandgender.master.baseline.csv")
+# 
 
 ###########################################
 #Calculate incidence 
 ###########################################
-
+reporthivbyageandgender.master.final <- read.csv("reporthivbyageandgender.master.baseline.csv")
 #Calculate Incidence overall
 reporthivbyageandgender.master.final$Year2 <- floor((reporthivbyageandgender.master.final$Year-0.5))
 reporthivbyageandgender.master.final$Uninfected.Population = reporthivbyageandgender.master.final$Population-reporthivbyageandgender.master.final$Infected
@@ -200,46 +74,70 @@ trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2","
 trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
 trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","sim.id","scenario"))
 trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
-head(trajectories_IRoverall,100)
+trajectories_IRoverall$Gender = 2
 
 #Calculate incidence by gender and append to overall
-trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2+Gender+sim.id+scenario, subset(reporthivbyageandgender.master), FUN=sum) #sums number of new infections in each year
-trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master), FUN=sum)
+trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2+Gender+sim.id+scenario, subset(reporthivbyageandgender.master.final, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master.final, Age>10 & Age<50), FUN=sum)
 trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+head(trajectories_IR.2)
 trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2","Gender","sim.id","scenario")]),] #remove second instance of duplicate rows
 trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
 trajectories_IR <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","Gender","sim.id","scenario"))
 trajectories_IR$incidence <- trajectories_IR$Newly.Infected / trajectories_IR$Uninfected.Population
-trajectories_IRoverall$Gender = 2
+head(trajectories_IR)
+
 trajectories_IR_comb <- rbind(trajectories_IR, trajectories_IRoverall)
-names(trajectories_IR_comb)
-trajectories_IR_comb <- subset(trajectories_IR_comb, Gender < 2)
+table(trajectories_IR_comb$Gender)
+head(trajectories_IR_comb[trajectories_IR_comb$Gender==2 & trajectories_IR_comb$sim.id=="ReportHIVByAgeAndGender_TPI0000_REP0001.csv",],100)
+
+###########################################
+#Bring in data:
+trajectories_IR_comb <- read.csv("EmodIncidence250Sims.csv")
 
 #get smoothed values
-table(trajectories_IRoverall$scenario)
 year=2050
-baseline.smooth <- subset(trajectories_IRoverall, Year2 < year & scenario=="noARTnoVMMC")
-smooth_vals = as.data.frame(cbind("incidence"= predict(loess(incidence~Year2,baseline.smooth, span=0.2)), "year" = baseline.smooth$Year2))
-smooth_vals <- smooth_vals[!duplicated(smooth_vals[c("year","incidence")]),] #remove second instance of duplicate rows
+baseline.smooth <- subset(trajectories_IR_comb, Year2 <= year & scenario=="baseline" & Gender==2)
+baseline.smooth.m <- subset(trajectories_IR_comb, Year2 <= year & scenario=="baseline" & Gender==0)
+baseline.smooth.f <- subset(trajectories_IR_comb, Year2 <= year & scenario=="baseline" & Gender==1)
 
-year=2050
-baseline.smooth.m <- subset(trajectories_IR_comb, Year2 < year & scenario=="baseline" & Gender==0)
-baseline.smooth.f <- subset(trajectories_IR_comb, Year2 < year & scenario=="baseline" & Gender==1)
-smooth_vals.m = as.data.frame(cbind("incidence"= predict(loess(incidence~Year2,baseline.smooth.m, span=0.2)), "year" = baseline.smooth.m$Year2))
-smooth_vals.m <- smooth_vals.m[!duplicated(smooth_vals.m[c("year","incidence")]),] #remove second instance of duplicate rows
-smooth_vals.f = as.data.frame(cbind("incidence"= predict(loess(incidence~Year2,baseline.smooth.f, span=0.2)), "year" = baseline.smooth.f$Year2))
-smooth_vals.f <- smooth_vals.f[!duplicated(smooth_vals.f[c("year","incidence")]),] #remove second instance of duplicate rows
+inc.smooth_vals = data.frame(cbind("incidence"= predict(loess(incidence~Year2,baseline.smooth, span=0.3), data.frame(Year2=seq(1980,2050,1))), "year" = seq(1980,2050,1), "gender"="Combined"))
+inc.smooth_vals$incidence <- as.numeric(as.character(inc.smooth_vals$incidence))
+inc.smooth_vals$year <- as.numeric(as.character(inc.smooth_vals$year))
+
+inc.smooth_vals.m = data.frame(cbind("incidence"= predict(loess(incidence~Year2,baseline.smooth.m, span=0.3), data.frame(Year2=seq(1980,2050,1))), "year" = seq(1980,2050,1), "gender"="Men"))
+inc.smooth_vals.m$incidence <- as.numeric(as.character(inc.smooth_vals.m$incidence))
+inc.smooth_vals.m$year <- as.numeric(as.character(inc.smooth_vals.m$year))
+
+inc.smooth_vals.f = data.frame(cbind("incidence"= predict(loess(incidence~Year2,baseline.smooth.f, span=0.3), data.frame(Year2=seq(1980,2050,1))), "year" = seq(1980,2050,1), "gender"="Women"))
+inc.smooth_vals.f$incidence <- as.numeric(as.character(inc.smooth_vals.f$incidence))
+inc.smooth_vals.f$year <- as.numeric(as.character(inc.smooth_vals.f$year))
+
+inc.smooth_vals.c <- rbind(inc.smooth_vals, inc.smooth_vals.m, inc.smooth_vals.f)
+table(inc.smooth_vals.c$gender)
+
+#write data frames
+write.csv(trajectories_IR_comb, "EmodIncidence250Sims.csv")
+write.csv(inc.smooth_vals.c, "EmodIncidenceSmoothedSims.csv")
 
 #Calibration plot
+inc.smooth_vals.f$year <- as.numeric(inc.smooth_vals.f$year)
+inc.smooth_vals.f$incidence <- as.numeric(inc.smooth_vals.f$incidence)
+ggplot(data=inc.smooth_vals.f,aes(x=year, y=incidence*100)) +
+  geom_line(color="blue") +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16)
+
 year=2050
 swaziland.inc <- ggplot(data=subset(trajectories_IRoverall, Year2 < year & scenario=="baseline")) +
   geom_point(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="baseline"), size=1.2, color = "grey", aes(x=Year2, y=incidence*100))+
   geom_line(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="baseline"), color="grey",aes(x=Year2, y=incidence*100, group=sim.id)) +
-  geom_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.1, se = T, size=1, color="black", linetype=1) +
-  geom_point(data = subset(incidence.data, Gender==2 & Year==2011), size=2, color = "purple", aes(x=Year, y=Incidence))+
-  geom_point(data = subset(incidence.data, Gender==2 & Year==2016), size=2, color = "red", aes(x=Year, y=Incidence))+
-  geom_errorbar(data = subset(incidence.data, Gender==2 & Year==2011), aes(x=Year, ymin=lb, ymax=ub), color="purple", width=2, size=1) +
-  geom_errorbar(data = subset(incidence.data, Gender==2 & Year==2016), aes(x=Year, ymin=lb, ymax=ub), color="red", width=2, size=1) +
+  geom_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.1, se = T, size=1, color="blue", linetype=1) +
+  geom_point(data = subset(incidence.data, Gender==2 & Year==2011), size=2, color = "black", aes(x=Year, y=Incidence))+
+  geom_point(data = subset(incidence.data, Gender==2 & Year==2016), size=2, color = "black", aes(x=Year, y=Incidence))+
+  geom_errorbar(data = subset(incidence.data, Gender==2 & Year==2011), aes(x=Year, ymin=lb, ymax=ub), color="black", width=2, size=1) +
+  geom_errorbar(data = subset(incidence.data, Gender==2 & Year==2016), aes(x=Year, ymin=lb, ymax=ub), color="black", width=2, size=1) +
   xlab("Year")+
   ylab("Incidence (per 100 py)")+
   theme_bw(base_size=16) +
@@ -297,7 +195,7 @@ ggsave("swaziland.incidence.5scenarios_FINAL.jpg", height=8, width=8)
 #Calculate incidence by gender
 ###########################################
 table(trajectories_IR_comb$Gender)
-labs <- c("1" = "Women", "0" = "Men")
+labs <- c("2"="Both", "1" = "Women", "0" = "Men")
 #Calibration plot
 swaziland.inc <- ggplot(data=subset(trajectories_IR_comb,  Year2 < year & scenario=="baseline")) +
   geom_line(data=subset(trajectories_IR_comb,  Year2 < year & scenario=="baseline"), color="grey",aes(x=Year2, y=incidence*100, group=sim.id)) +
@@ -354,7 +252,6 @@ swaziland.inc
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
 ggsave("swaziland.incidence.bygender.4scenarios.jpg", height=8, width=12)
-
 
 ###########################################
 #Incidence scenarios by age and gender
