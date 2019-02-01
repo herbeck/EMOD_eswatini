@@ -75,12 +75,12 @@ trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
 trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","sim.id","scenario"))
 trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
 trajectories_IRoverall$Gender = 2
+head(trajectories_IRoverall)
 
 #Calculate incidence by gender and append to overall
 trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2+Gender+sim.id+scenario, subset(reporthivbyageandgender.master.final, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
 trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master.final, Age>10 & Age<50), FUN=sum)
 trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
-head(trajectories_IR.2)
 trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2","Gender","sim.id","scenario")]),] #remove second instance of duplicate rows
 trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
 trajectories_IR <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","Gender","sim.id","scenario"))
@@ -89,9 +89,11 @@ head(trajectories_IR)
 
 trajectories_IR_comb <- rbind(trajectories_IR, trajectories_IRoverall)
 table(trajectories_IR_comb$Gender)
-head(trajectories_IR_comb[trajectories_IR_comb$Gender==2 & trajectories_IR_comb$sim.id=="ReportHIVByAgeAndGender_TPI0000_REP0001.csv",],100)
 
 ###########################################
+#save incidence data
+write.csv(trajectories_IR_comb, "EmodIncidence250Sims.csv")
+
 #Bring in data:
 trajectories_IR_comb <- read.csv("EmodIncidence250Sims.csv")
 
@@ -117,14 +119,14 @@ inc.smooth_vals.c <- rbind(inc.smooth_vals, inc.smooth_vals.m, inc.smooth_vals.f
 table(inc.smooth_vals.c$gender)
 
 #write data frames
-write.csv(trajectories_IR_comb, "EmodIncidence250Sims.csv")
 write.csv(inc.smooth_vals.c, "EmodIncidenceSmoothedSims.csv")
 
 #Calibration plot
-inc.smooth_vals.f$year <- as.numeric(inc.smooth_vals.f$year)
-inc.smooth_vals.f$incidence <- as.numeric(inc.smooth_vals.f$incidence)
-ggplot(data=inc.smooth_vals.f,aes(x=year, y=incidence*100)) +
-  geom_line(color="blue") +
+head(inc.smooth_vals.c)
+inc.smooth_vals.c$year <- as.numeric(inc.smooth_vals.c$year)
+inc.smooth_vals.c$incidence <- as.numeric(inc.smooth_vals.c$incidence)
+ggplot(data=inc.smooth_vals.c,aes(x=year, y=incidence*100, group=gender, color=gender)) +
+  geom_line() +
   xlab("Year")+
   ylab("Incidence (per 100 py)")+
   theme_bw(base_size=16)
