@@ -129,7 +129,8 @@ ggplot(data=inc.smooth_vals.c,aes(x=year, y=incidence*100, group=gender, color=g
   geom_line() +
   xlab("Year")+
   ylab("Incidence (per 100 py)")+
-  theme_bw(base_size=16)
+  theme_bw(base_size=16) +
+  theme(legend.position="bottom") 
 
 year=2050
 swaziland.inc <- ggplot(data=subset(trajectories_IRoverall, Year2 < year & scenario=="baseline")) +
