@@ -90,7 +90,6 @@ head(trajectories_IR)
 trajectories_IR_comb <- rbind(trajectories_IR, trajectories_IRoverall)
 table(trajectories_IR_comb$Gender)
 
-###########################################
 #save incidence data
 write.csv(trajectories_IR_comb, "EmodIncidence250Sims.csv")
 
@@ -131,6 +130,29 @@ ggplot(data=inc.smooth_vals.c,aes(x=year, y=incidence*100, group=gender, color=g
   ylab("Incidence (per 100 py)")+
   theme_bw(base_size=16) +
   theme(legend.position="bottom") 
+
+#Calibration plot with sims by gender
+head(trajectories_IR_comb)
+class(trajectories_IR_comb$Gender)
+trajectories_IR_comb$Gender <- as.factor(trajectories_IR_comb$Gender)
+labs = c("Male","Female","Combined")
+p <- ggplot(data=trajectories_IR_comb,aes(x=Year2, y=incidence*100, group=interaction(Gender, sim.id), color=Gender)) +
+  geom_line(alpha=0.05) +
+  geom_smooth(aes(x=Year2, y=incidence*100, color=Gender, group=Gender),method="loess", span=0.1, se = T, size=1, linetype=1) +
+  scale_color_manual(values = c("blue","red","purple"), labels=labs) +
+  scale_y_continuous(breaks = seq(0,6,1),limits=c(0,6),expand = c(0,0)) +
+  scale_x_continuous(breaks = seq(1980,year,5),limits=c(1980,year),expand = c(0,0)) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))+
+  theme(legend.position="bottom") 
+p
 
 year=2050
 swaziland.inc <- ggplot(data=subset(trajectories_IRoverall, Year2 < year & scenario=="baseline")) +
@@ -194,9 +216,8 @@ swaziland.inc
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
 ggsave("swaziland.incidence.5scenarios_FINAL.jpg", height=8, width=8)
 
-###########################################
-#Calculate incidence by gender
-###########################################
+
+#Plot incidence by gender
 table(trajectories_IR_comb$Gender)
 labs <- c("2"="Both", "1" = "Women", "0" = "Men")
 #Calibration plot
@@ -206,6 +227,29 @@ swaziland.inc <- ggplot(data=subset(trajectories_IR_comb,  Year2 < year & scenar
   stat_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.2, se = T, size=1, color="blue") +
   geom_point(data = subset(incidence.data, Gender < 2), size=2, color = "black", aes(x=Year, y=Incidence))+
   geom_errorbar(data = subset(incidence.data, Gender < 2), aes(x=Year, ymin=lb, ymax=ub), color="black", width=2, size=1) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py")+
+  theme_bw(base_size=16) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  scale_y_continuous(breaks = seq(0,6,1),expand = c(0,0)) +
+  theme(legend.position="bottom") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+swaziland.inc
+
+#Plot incidence by gender (all one plot)
+table(trajectories_IR_comb$Gender)
+labs <- c("2"="Both", "1" = "Women", "0" = "Men")
+#Calibration plot
+swaziland.inc <- ggplot(data=subset(trajectories_IR_comb,  Year2 < year & scenario=="baseline")) +
+  geom_line(data=subset(trajectories_IR_comb,  Year2 < year & scenario=="baseline"),aes(x=Year2, y=incidence*100, group=sim.id, color=Gender)) +
+  stat_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.2, se = T, size=1) +
+  geom_point(data = subset(incidence.data, Gender < 2), size=2, color = "black", aes(x=Year, y=Incidence))+
+  geom_errorbar(data = subset(incidence.data, Gender < 2), aes(x=Year, ymin=lb, ymax=ub, color=Gender), color="black", width=2, size=1) +
   xlab("Year")+
   ylab("Incidence (per 100 py")+
   theme_bw(base_size=16) +
@@ -302,9 +346,9 @@ swaziland.inc
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
 ggsave("swaziland.incidence.byageandgender.2scenarios.jpg", height=12, width=10)
 
-#############################################
+############################################
 #Prevalence overall 15-49
-#############################################
+############################################
 #Prevalence 15-49 
 reporthivbyageandgender.master2 <- subset(reporthivbyageandgender.master.final, scenario=="baseline")
 table(reporthivbyageandgender.master2$scenario)
@@ -327,7 +371,7 @@ swaziland.prev <- ggplot(data=subset(trajectories_prev, Year < year)) +
   ylab("Prevalence")+
   theme_bw(base_size=16) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
-  scale_x_continuous(breaks = seq(1980,2020,5)) +
+  scale_x_continuous(breaks = seq(1980,2050,5)) +
   theme(legend.position="bottom") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   theme(strip.background = element_rect(colour="black", fill="white"))
@@ -343,8 +387,8 @@ ggsave("swaziland.prevalence.calib.gender_baseline.jpg", height=8, width=15)
 reporthivbyageandgender.master2 <- subset(reporthivbyageandgender.master.final, scenario=="baseline")
 table(reporthivbyageandgender.master2$scenario)
 head(reporthivbyageandgender.master2)
-trajectories_infections <- aggregate(Infected ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master2, Age>15 & Age<50), FUN=sum) #sums prev infections in each year
-trajectories_population <- aggregate(Population ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master2, Age>15 & Age<50), FUN=sum)
+trajectories_infections <- aggregate(Infected ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master2, Age>10 & Age<50), FUN=sum) #sums prev infections in each year
+trajectories_population <- aggregate(Population ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master2, Age>10 & Age<50), FUN=sum)
 trajectories_prev <- merge(trajectories_infections, trajectories_population, by=c("Year","Gender","sim.id","scenario"))
 trajectories_prev$prevalence <- trajectories_prev$Infected / trajectories_prev$Population
 head(prevalence.bothgenders)
