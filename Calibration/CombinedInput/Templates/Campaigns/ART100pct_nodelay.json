@@ -2554,36 +2554,6 @@
          "class": "CampaignEventByYear"
       },
       {
-         "Event_Coordinator_Config": {
-            "Intervention_Config": {
-               "Actual_IndividualIntervention_Config": {
-                  "Broadcast_Event": "OnART3",
-                  "Delay_Distribution": "EXPONENTIAL_DURATION",
-                  "Delay_Period": 7300,
-                  "Disqualifying_Properties": [
-                     "CascadeState:LostForever"
-                  ],
-                  "Max_Entries": 1,
-                  "Muxer_Name": "ARTDropoutDelay",
-                  "New_Property_Value": "CascadeState:OnART",
-                  "Intervention_Name": "On_ART",
-                  "class": "HIVMuxer"
-               },
-               "Trigger_Condition_List": [
-                  "OnART1"
-               ],
-               "class": "NodeLevelHealthTriggeredIV"
-            },
-            "class": "StandardInterventionDistributionEventCoordinator"
-         },
-         "Event_Name": "OnART: state 2 (delay to dropout)",
-         "Nodeset_Config": {
-            "class": "NodeSetAll"
-         },
-         "Start_Year": 1990,
-         "class": "CampaignEventByYear"
-      },
-	        {
         "Event_Coordinator_Config": {
             "Intervention_Config": {
                "class": "HIVDelayedIntervention",
@@ -2620,7 +2590,7 @@
                   0.232140197,
                   0.288210296,
                   0.360350493,
-				  0.81
+				  1
                ]
             },
             "Update_Period": 30.4166666666667,
@@ -2663,7 +2633,7 @@
                   2013,
                   2014,
                   2015,
-				  2019
+				  2020
                ],
                "Values": [
                   0,
@@ -2673,7 +2643,7 @@
                   0.444,
                   0.522,
                   0.6,
-				  0.81
+				  1
                ]
             },
             "Update_Period": 30.4166666666667,
@@ -2716,7 +2686,7 @@
                   2013,
                   2014,
                   2015,
-				  2019
+				  2020
                ],
                "Values": [
                   0,
@@ -2726,7 +2696,7 @@
                   0.616,
                   0.688,
                   0.76,
-				  0.81
+				  1
                ]
             },
             "Update_Period": 30.4166666666667,
@@ -2768,7 +2738,8 @@
                   2012,
                   2013,
                   2014,
-                  2015
+                  2015,
+				  2020
                ],
                "Values": [
                   0,
@@ -2777,7 +2748,8 @@
                   0.663037836,
                   0.75138387,
                   0.839729905,
-                  0.92807594
+                  0.92807594,
+				  1
                ]
             },
             "Update_Period": 30.4166666666667,
@@ -2820,7 +2792,7 @@
                   2013,
                   2014,
                   2015,
-				  2019
+				  2020
                ],
                "Values": [
                   0,
@@ -2830,7 +2802,7 @@
                   0.432,
                   0.516,
                   0.65,
-				  0.81
+				  1
                ]
             },
             "Update_Period": 30.4166666666667,
@@ -2873,7 +2845,7 @@
                   2013,
                   2014,
                   2015,
-				  2019
+				  2020
                ],
                "Values": [
                   0,
@@ -2883,7 +2855,7 @@
                   0.608,
                   0.704,
                   0.85,
-				  0.85
+				  1
                ]
             },
             "Update_Period": 30.4166666666667,
@@ -2925,7 +2897,8 @@
                   2012,
                   2013,
                   2014,
-                  2015
+                  2015,
+				  2020
                ],
                "Values": [
                   0,
@@ -2934,7 +2907,8 @@
                   0.636,
                   0.724,
                   0.812,
-                  0.95
+                  0.95,
+				  1
                ]
             },
             "Update_Period": 30.4166666666667,
@@ -2976,7 +2950,8 @@
                   2012,
                   2013,
                   2014,
-                  2015
+                  2015,
+				  2020
                ],
                "Values": [
                   0,
@@ -2985,7 +2960,8 @@
                   0.666031358,
                   0.751805914,
                   0.83758047,
-                  0.923355025
+                  0.923355025,
+				  1
                ]
             },
             "Update_Period": 30.4166666666667,
@@ -2997,56 +2973,6 @@
                1
             ],
             "class": "NodeSetNodeList"
-         },
-         "Start_Year": 1990,
-         "class": "CampaignEventByYear"
-      },
-      {
-         "Event_Coordinator_Config": {
-            "Intervention_Config": {
-               "Actual_IndividualIntervention_Config": {
-                  "class": "ARTDropout"
-               },
-               "Trigger_Condition_List": [
-                  "OnART3"
-               ],
-               "class": "NodeLevelHealthTriggeredIV"
-            },
-            "class": "StandardInterventionDistributionEventCoordinator"
-         },
-         "Event_Name": "OnART: state 3 (run ARTDropout)",
-         "Nodeset_Config": {
-            "class": "NodeSetAll"
-         },
-         "Start_Year": 1990,
-         "class": "CampaignEventByYear"
-      },
-      {
-         "END": "ART",
-         "Event_Coordinator_Config": {
-            "Demographic_Coverage": 1,
-            "Intervention_Config": {
-               "Actual_IndividualIntervention_Config": {
-                  "Choices": {
-                     "HCTUptakePostDebut8": 1,
-                     "LostForever9": 0
-                  },
-                  "Disqualifying_Properties": [
-                     "CascadeState:LostForever"
-                  ],
-                  "New_Property_Value": "CascadeState:OnART",
-                  "class": "HIVRandomChoice"
-               },
-               "Trigger_Condition_List": [
-                  "OnART3"
-               ],
-               "class": "NodeLevelHealthTriggeredIV"
-            },
-            "class": "StandardInterventionDistributionEventCoordinator"
-         },
-         "Event_Name": "OnART: state 4 (Willing to re-enroll in ART?)",
-         "Nodeset_Config": {
-            "class": "NodeSetAll"
          },
          "Start_Year": 1990,
          "class": "CampaignEventByYear"
