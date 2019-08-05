@@ -38,32 +38,31 @@ labs <- c("1" = "Women", "0" = "Men")
 #Stich together output files for each of 250 sims
 ###########################################
 
-# #baseline
-# files <- list.files(path = '../Output/Baseline/ReportHIVByAgeAndGender', full.names = F) #list all the output files
-# f <- paste0('../Output/Baseline/ReportHIVByAgeAndGender/', files)
-# names(reporthivbyageandgender)
-# 
-# for (i in seq(1,250,1)){
-#   reporthivbyageandgender <- read.csv(paste0(f[i]))
-#   reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,11,13)]
-#   reporthivbyageandgender$scenario <- "baseline"
-#   reporthivbyageandgender$sim.id <- paste0(files[i])
-#   if (i==1){
-#     reporthivbyageandgender.master <- reporthivbyageandgender
-#   } else {
-#     reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-#     print(paste0("I'm working on baseline folder",i))
-#   }
-# }
-# reporthivbyageandgender.master.baseline <- reporthivbyageandgender.master
-# 
-# write.csv(reporthivbyageandgender.master.baseline, "reporthivbyageandgender.master.baseline.csv")
-# 
+#baseline
+files <- list.files(path = '../Output/ReportHIVByAgeAndGender/ART100pct_nodelay/ReportHIVByAgeAndGender', full.names = F) #list all the output files
+f <- paste0('../Output/ReportHIVByAgeAndGender/ART100pct_nodelay/ReportHIVByAgeAndGender/', files)
 
+for (i in seq(1,100,1)){
+  reporthivbyageandgender <- read.csv(paste0(f[i]))
+  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,11,13)]
+  reporthivbyageandgender$scenario <- "ART100nodelay"
+  reporthivbyageandgender$sim.id <- paste0(files[i])
+  if (i==1){
+    reporthivbyageandgender.master <- reporthivbyageandgender
+  } else {
+    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
+    print(paste0("I'm working on ART100pctnodelay folder",i))
+  }
+}
+reporthivbyageandgender.master.ART100nodelay <- reporthivbyageandgender.master
+
+write.csv(reporthivbyageandgender.master.baseline, "reporthivbyageandgender.master.baseline.csv")
+
+reporthivbyageandgender.master.final <- read.csv("reporthivbyageandgender.master.baseline.csv")
+reporthivbyageandgender.master.final <- reporthivbyageandgender.master.ART100nodelay
 ###########################################
 #Calculate incidence 
 ###########################################
-reporthivbyageandgender.master.final <- read.csv("reporthivbyageandgender.master.baseline.csv")
 #Calculate Incidence overall
 reporthivbyageandgender.master.final$Year2 <- floor((reporthivbyageandgender.master.final$Year-0.5))
 reporthivbyageandgender.master.final$Uninfected.Population = reporthivbyageandgender.master.final$Population-reporthivbyageandgender.master.final$Infected
@@ -154,10 +153,12 @@ p <- ggplot(data=trajectories_IR_comb,aes(x=Year2, y=incidence*100, group=intera
   theme(legend.position="bottom") 
 p
 
+head(trajectories_IRoverall)
+
 year=2050
-swaziland.inc <- ggplot(data=subset(trajectories_IRoverall, Year2 < year & scenario=="baseline")) +
-  geom_point(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="baseline"), size=1.2, color = "grey", aes(x=Year2, y=incidence*100))+
-  geom_line(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="baseline"), color="grey",aes(x=Year2, y=incidence*100, group=sim.id)) +
+swaziland.inc <- ggplot(data=subset(trajectories_IRoverall, Year2 < year & scenario=="ART100nodelay")) +
+  geom_point(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="ART100nodelay"), size=1.2, color = "grey", aes(x=Year2, y=incidence*100))+
+  geom_line(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="ART100nodelay"), color="grey",aes(x=Year2, y=incidence*100, group=sim.id)) +
   geom_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.1, se = T, size=1, color="blue", linetype=1) +
   geom_point(data = subset(incidence.data, Gender==2 & Year==2011), size=2, color = "black", aes(x=Year, y=Incidence))+
   geom_point(data = subset(incidence.data, Gender==2 & Year==2016), size=2, color = "black", aes(x=Year, y=Incidence))+

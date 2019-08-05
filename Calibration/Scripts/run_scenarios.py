@@ -156,8 +156,9 @@ cpn3 = CampaignTemplate.from_file(os.path.join(plugin_files_dir, 'Campaigns', 'N
 cpn4 = CampaignTemplate.from_file(os.path.join(plugin_files_dir, 'Campaigns', 'NoART.json'))
 cpn5 = CampaignTemplate.from_file(os.path.join(plugin_files_dir, 'Campaigns', 'ART909090.json'))
 cpn6 = CampaignTemplate.from_file(os.path.join(plugin_files_dir, 'Campaigns', 'ART100pct.json'))
+cpn7 = CampaignTemplate.from_file(os.path.join(plugin_files_dir, 'Campaigns', 'ART100pct_nodelay.json'))
 
-campaigns = {"cpn1":cpn1, "cpn2":cpn2, "cpn3":cpn3,"cpn4":cpn4,"cpn5":cpn5,"cpn6":cpn6}
+campaigns = {"cpn1":cpn1, "cpn2":cpn2, "cpn3":cpn3,"cpn4":cpn4,"cpn5":cpn5,"cpn6":cpn6,"cpn7":cpn7}
 
 # Load the demographics
 demog = DemographicsTemplate.from_file( os.path.join(plugin_files_dir, 'Demographics', 'Swaziland_Demographics_With_Properties.json'))
@@ -172,7 +173,7 @@ scenario_header = [
 ]
 
 scenarios = [
-	 ['Baseline', "cpn1"]
+	 ['ART100pct_nodelay', "cpn7"]
      ]
 	 
 #	 ['NoVMMC', "cpn2"],

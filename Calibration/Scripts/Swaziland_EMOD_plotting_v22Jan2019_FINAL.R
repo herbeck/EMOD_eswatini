@@ -34,6 +34,12 @@ infile.parms <- "ReEvaluatedLikelihood_full_MASTER_new_r"
 infile.parms <- read.csv(paste0('./', infile.parms, '.csv'))
 names(infile.parms)
 
+stack(lapply(infile.parms, quantile, prob = c(0.25,0.5,0.75), names = T))
+
+infile.parms %>%
+  summarise_all(funs(list(quantile(., probs = c(0.5,0.25,0.75) )))) %>%
+  gather("Column", "Median p25 p75")
+  
 #reshape to create ggplots of histograms
 ggplot(gather(infile.parms), aes(value)) + 
   geom_histogram(bins = 10, fill="white", col="black") + 
@@ -83,6 +89,7 @@ setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Sce
 reporthivbyageandgender.master <- read.csv("reporthivbyageandgender.master.final.condensed.csv")
 table(reporthivbyageandgender.master$scenario)
 table(reporthivbyageandgender.master$Agecat)
+head(reporthivbyageandgender.master)
 # #bring in risk scenarios
 # reporthivbyageandgender.master.final.risk <- read.csv("reporthivbyageandgender.master.final.risk.csv")
 # head(reporthivbyageandgender.master.final.risk)
@@ -223,6 +230,9 @@ table(reporthivbyageandgender.master.final$scenario)
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL")
 write.csv(reporthivbyageandgender.master.final, "reporthivbyageandgender.master.final.csv")
 
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL")
+reporthivbyageandgender.master.final <- read.csv("reporthivbyageandgender.master.final.csv")
+
 ###########################################
 #Bring in risk scenarios
 ###########################################
@@ -353,20 +363,28 @@ trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2","
 trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
 trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","sim.id","scenario"))
 trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
-head(trajectories_IRoverall,100)
+summary(trajectories_IRoverall$incidence[trajectories_IRoverall$scenario=="baseline"])
 
 #Calculate incidence by gender and append to overall
-trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2+Gender+sim.id+scenario, subset(reporthivbyageandgender.master), FUN=sum) #sums number of new infections in each year
-trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master), FUN=sum)
+trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2+Gender+sim.id+scenario, subset(reporthivbyageandgender.master.final, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year+Gender+sim.id+scenario, subset(reporthivbyageandgender.master.final, Age>10 & Age<50), FUN=sum)
 trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
 trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2","Gender","sim.id","scenario")]),] #remove second instance of duplicate rows
 trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
 trajectories_IR <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","Gender","sim.id","scenario"))
 trajectories_IR$incidence <- trajectories_IR$Newly.Infected / trajectories_IR$Uninfected.Population
+summary(trajectories_IR$incidence[trajectories_IR$scenario=="baseline" & trajectories_IR$Gender==0])
+summary(trajectories_IR$incidence[trajectories_IR$scenario=="baseline" & trajectories_IR$Gender==1])
+
+#combine gender-specific and overall IR trajectories
 trajectories_IRoverall$Gender = 2
+names(trajectories_IR)
+names(trajectories_IRoverall)
 trajectories_IR_comb <- rbind(trajectories_IR, trajectories_IRoverall)
 names(trajectories_IR_comb)
-trajectories_IR_comb <- subset(trajectories_IR_comb, Gender < 2)
+#trajectories_IR_comb <- subset(trajectories_IR_comb, Gender < 2)
+summary(trajectories_IR_comb$incidence[trajectories_IRoverall$scenario=="baseline" & trajectories_IR_comb$Gender==0])
+summary(trajectories_IR_comb$incidence[trajectories_IRoverall$scenario=="baseline" & trajectories_IR_comb$Gender==1])
 
 #get smoothed values
 table(trajectories_IRoverall$scenario)
@@ -388,11 +406,11 @@ year=2050
 swaziland.inc <- ggplot(data=subset(trajectories_IRoverall, Year2 < year & scenario=="baseline")) +
   geom_point(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="baseline"), size=1.2, color = "grey", aes(x=Year2, y=incidence*100))+
   geom_line(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="baseline"), color="grey",aes(x=Year2, y=incidence*100, group=sim.id)) +
-  geom_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.1, se = T, size=1, color="black", linetype=1) +
-  geom_point(data = subset(incidence.data, Gender==2 & Year==2011), size=2, color = "purple", aes(x=Year, y=Incidence))+
-  geom_point(data = subset(incidence.data, Gender==2 & Year==2016), size=2, color = "red", aes(x=Year, y=Incidence))+
-  geom_errorbar(data = subset(incidence.data, Gender==2 & Year==2011), aes(x=Year, ymin=lb, ymax=ub), color="purple", width=2, size=1) +
-  geom_errorbar(data = subset(incidence.data, Gender==2 & Year==2016), aes(x=Year, ymin=lb, ymax=ub), color="red", width=2, size=1) +
+  geom_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.1, se = T, size=1, color="blue", linetype=1) +
+  geom_point(data = subset(incidence.data, Gender==2 & Year==2011), size=2, color = "black", aes(x=Year, y=Incidence))+
+  geom_point(data = subset(incidence.data, Gender==2 & Year==2016), size=2, color = "black", aes(x=Year, y=Incidence))+
+  geom_errorbar(data = subset(incidence.data, Gender==2 & Year==2011), aes(x=Year, ymin=lb, ymax=ub), color="black", width=2, size=1) +
+  geom_errorbar(data = subset(incidence.data, Gender==2 & Year==2016), aes(x=Year, ymin=lb, ymax=ub), color="black", width=2, size=1) +
   xlab("Year")+
   ylab("Incidence (per 100 py)")+
   theme_bw(base_size=16) +
@@ -407,7 +425,6 @@ swaziland.inc <- ggplot(data=subset(trajectories_IRoverall, Year2 < year & scena
       strip.background = element_blank(),
       panel.border = element_rect(colour = "black"))
 swaziland.inc
-names(swaziland.inc)
 
 #get smoothed values
 year=2050
@@ -427,7 +444,7 @@ swaziland.inc <- ggplot() +
   xlab("Year")+
   ylab("Incidence (per 100 py)")+
   theme_bw(base_size=24) +
-  scale_color_manual(labels = c("100% ART uptake","No interventions", "VMMC only","Age-targeted 90-90-90", "Baseline"), values = c("green","red", "orange", "purple", "blue")) +
+  scale_color_manual(labels = c("100% ART initiation","No interventions", "VMMC only","Age-targeted 90-90-90", "Baseline"), values = c("green","red", "orange", "purple", "blue")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
   geom_hline(yintercept=0.1, linetype=2) +
   scale_y_continuous(breaks = seq(0,6,0.5),limits=c(0,5), expand = c(0,0)) +
@@ -452,8 +469,8 @@ ggsave("swaziland.incidence.5scenarios_FINAL.jpg", height=8, width=8)
 table(trajectories_IR_comb$Gender)
 labs <- c("1" = "Women", "0" = "Men")
 #Calibration plot
-swaziland.inc <- ggplot(data=subset(trajectories_IR_comb,  Year2 < year & scenario=="baseline")) +
-  geom_line(data=subset(trajectories_IR_comb,  Year2 < year & scenario=="baseline"), color="grey",aes(x=Year2, y=incidence*100, group=sim.id)) +
+swaziland.inc <- ggplot(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="baseline")) +
+  geom_line(data=subset(trajectories_IRoverall,  Year2 < year & scenario=="baseline"), color="grey",aes(x=Year2, y=incidence*100, group=sim.id)) +
   facet_grid(~Gender, labeller=labeller(Gender = labs)) +
   stat_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.2, se = T, size=1, color="blue") +
   geom_point(data = subset(incidence.data, Gender < 2), size=2, color = "black", aes(x=Year, y=Incidence))+
@@ -475,6 +492,32 @@ swaziland.inc
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
 ggsave("swaziland.incidence.bygender.calib_FINAL.jpg", height=8, width=12)
 
+labs.3 <- c("2"="Combined", "1" = "Women", "0" = "Men")
+table(trajectories_IR_comb$Gender)
+
+swaziland.inc <- ggplot(data=subset(trajectories_IR_comb,  Year2 < year & scenario=="baseline")) +
+  geom_line(data=subset(trajectories_IR_comb,  Year2 < year & scenario=="baseline"), color="grey",aes(x=Year2, y=incidence*100, group=sim.id)) +
+  facet_grid(~Gender, labeller=labeller(Gender = labs.3)) +
+  stat_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.2, se = T, size=1, color="blue") +
+  geom_point(data = subset(incidence.data), size=2, color = "black", aes(x=Year, y=Incidence))+
+  geom_errorbar(data = subset(incidence.data), aes(x=Year, ymin=lb, ymax=ub), color="black", width=2, size=1) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  scale_y_continuous(breaks = seq(0,6,1),expand = c(0,0)) +
+  theme(legend.position="bottom") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+swaziland.inc
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("swaziland.incidence.bygender_andoverall.calib_FINAL.jpg", height=5, width=12)
+
 ###########################################
 #Incidence scenarios by gender
 ###########################################
@@ -490,7 +533,7 @@ swaziland.inc <- ggplot() +
   ylab("Incidence (per 100 py)")+
   facet_grid(~Gender, labeller=labeller(Gender = labs)) +
   theme_bw(base_size=24) +
-  scale_color_manual(labels = c("100% ART uptake","No interventions", "VMMC only","Age-targeted 90-90-90", "Baseline"), values = c("green","red", "orange", "purple", "blue")) +
+  scale_color_manual(labels = c("100% ART initiation","No interventions", "VMMC only","Age-targeted 90-90-90", "Baseline"), values = c("green","red", "orange", "purple", "blue")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
   scale_y_continuous(breaks = seq(0,6,0.5),limits=c(0,5), expand = c(0,0)) +
   scale_x_continuous(breaks = seq(1975,year,5), limits=c(1975, year),expand = c(0,0)) +
@@ -507,7 +550,6 @@ swaziland.inc
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
 ggsave("swaziland.incidence.bygender.4scenarios.jpg", height=8, width=12)
-
 
 ###########################################
 #Incidence scenarios by age and gender
@@ -536,7 +578,7 @@ swaziland.inc <- ggplot() +
   ylab("Incidence (per 100 py)")+
   facet_grid(Gender~Agecat, labeller=labeller(Gender = labs, Agecat = labs.age)) +
   theme_bw(base_size=24) +
-  scale_color_manual(labels = c("100% ART uptake","Age-targeted 90-90-90", "Baseline"), values = c("green", "purple", "blue")) +
+  scale_color_manual(labels = c("100% ART initiation","Age-targeted 90-90-90", "Baseline"), values = c("green", "purple", "blue")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
   scale_y_continuous(breaks = seq(0,2.5,0.5),limits=c(0,2.6), expand = c(0,0)) +
   scale_x_continuous(breaks = seq(year1,year2,5), limits=c(year1, year2+1),expand = c(0,0)) +
@@ -553,7 +595,7 @@ swaziland.inc <- ggplot() +
 swaziland.inc
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland.incidence.byageandgender.2scenarios.jpg", height=12, width=10)
+ggsave("swaziland.incidence.byageandgender.2scenarios.jpg", height=12, width=12)
 
 #############################################
 #Cumulative Infections & Number of infections averted by scenario
@@ -701,7 +743,7 @@ swaziland.inc <- ggplot(data=subset(w,  Year2 < year)) +
   ylab("Cumulative infections averted (1000's)")+
   theme_bw(base_size=24) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
-  scale_y_continuous(breaks = seq(0,25,5),limits=c(-5,30), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(-5,25,5),limits=c(-5,30), expand = c(0,0)) +
   scale_x_continuous(breaks = seq(2015,year,5), limits=c(2015,year),expand = c(0,0)) +
   theme(legend.position="bottom") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
@@ -713,7 +755,7 @@ swaziland.inc <- ggplot(data=subset(w,  Year2 < year)) +
 swaziland.inc
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland.infections.averted.scenarios.byageandgender.jpg", height=12, width=9)
+ggsave("swaziland.infections.averted.scenarios.byageandgender.jpg", height=12, width=12)
 
 #get smoothed values
 year=2050
@@ -729,8 +771,8 @@ smooth_vals <- smooth_vals[!duplicated(smooth_vals[c("year","infav")]),] #remove
 reporthivbyageandgender.master2 <- subset(reporthivbyageandgender.master.final, scenario=="baseline")
 table(reporthivbyageandgender.master2$scenario)
 head(reporthivbyageandgender.master2)
-trajectories_infections <- aggregate(Infected ~ Year+sim.id, subset(reporthivbyageandgender.master2, Age>=15 & Age<50), FUN=sum) #sums prev infections in each year
-trajectories_population <- aggregate(Population ~ Year+sim.id, subset(reporthivbyageandgender.master2, Age>=15 & Age<50), FUN=sum)
+trajectories_infections <- aggregate(Infected ~ Year+sim.id, subset(reporthivbyageandgender.master2, Age>10 & Age<50), FUN=sum) #sums prev infections in each year
+trajectories_population <- aggregate(Population ~ Year+sim.id, subset(reporthivbyageandgender.master2, Age>10 & Age<50), FUN=sum)
 trajectories_prev <- merge(trajectories_infections, trajectories_population, by=c("Year","sim.id"))
 trajectories_prev$prevalence <- trajectories_prev$Infected / trajectories_prev$Population
 head(prevalence.bothgenders)
@@ -754,7 +796,7 @@ swaziland.prev <- ggplot(data=subset(trajectories_prev, Year < year)) +
 swaziland.prev
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland.prevalence.calib.gender_baseline.jpg", height=8, width=15)
+ggsave("swaziland.prevalence.calib.gender_baseline_age20_49.jpg", height=8, width=15)
 
 #############################################
 #Prevalence by age and gender
@@ -857,11 +899,14 @@ ggsave("swaziland.prevalence.calib.ageandgender_baseline_byage.jpg", height=6, w
 ##############################################
 #ART coverage
 ################################################
-names(reporthivbyageandgender.master)
-table(reporthivbyageandgender.master$scenario)
-table(reporthivbyageandgender.master$Agecat)
+names(reporthivbyageandgender.master.final)
+table(reporthivbyageandgender.master.final$scenario)
+reporthivbyageandgender.master.final$Agecat<-cut(reporthivbyageandgender.master.final$Age, c(15,25,35,45), right=F)
+table(reporthivbyageandgender.master.final$Agecat)
+
 trajectory_ART_calib <- aggregate(cbind(On_ART, Infected) ~ Year+Agecat+Gender+sim.id+scenario,
-                                  subset(reporthivbyageandgender.master, Year > 2000 & Year < 2050), FUN=sum)
+                                  subset(reporthivbyageandgender.master.final, Year > 2000 & Year < 2050
+                                         & Age >10 & Age < 50), FUN=sum)
 trajectory_ART_calib$ART_coverage <- trajectory_ART_calib$On_ART / trajectory_ART_calib$Infected
 trajectory_ART_calib.master<-trajectory_ART_calib
 head(trajectory_ART_calib.master)
@@ -873,6 +918,10 @@ head(trajectory_ART_calib.master.plot)
 table(trajectory_ART_calib.master.plot$Agecat)
 table(trajectory_ART_calib.master.plot$scenario)
 year=2049
+labs.scenario <- c("baseline"="scenario 1", "909090"="scenario 4", "ART100pct"="scenario 5")
+trajectory_ART_calib.master.plot$scenario_f = factor(trajectory_ART_calib.master.plot$scenario, levels=c('baseline','909090','ART100pct','noART','noARTnoVMMC'))
+table(trajectory_ART_calib.master.plot$scenario_f)
+
 swaziland.ART.calib <- ggplot() +
   geom_smooth(data=trajectory_ART_calib.master.plot,
               aes(x=Year, y=ART_coverage*100, group = factor(Agecat), color=factor(Agecat)), method="loess",span=0.1, se=F, size=1.2) +
@@ -881,24 +930,29 @@ swaziland.ART.calib <- ggplot() +
   geom_point(data=subset(artdata), aes(x=Year, y=ART_coverage*100,
                                        color=factor(Agecat)), size=2) +
   geom_errorbar(data = subset(artdata), aes(x=Year, ymin=lb*100, ymax=ub*100, color=factor(Agecat)), width=1, size=1.2) +
-  facet_grid(scenario~Gender, labeller=labeller(Gender = labs)) +
+  facet_grid(scenario_f~Gender, labeller=labeller(Gender = labs, scenario_f = labs.scenario)) +
   theme(legend.position="bottom") +
   #geom_hline(aes(yintercept=81)) +
-  ylab("ART Coverage %")+
-  theme_bw(base_size=20) +
-  #scale_color_manual(labels = c("15-24", "25-34", "35-49"), values = c("blue", "purple", "red")) +
+  ylab("ART Coverage (%)")+
+  theme_bw(base_size=18) +
+  scale_color_manual(labels = c("15-24", "25-34", "35-44"), values = c("blue", "purple", "red")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
-  scale_y_continuous(limits=c(0,100), breaks = seq(0,100,10), expand=c(0,0)) +
+  scale_y_continuous(limits=c(0,100), breaks = seq(0,90,10), expand=c(0,0)) +
   scale_x_continuous(limits = c(2000,year), breaks = seq(2000,year+1,5), expand=c(0,0)) +
   theme(legend.position="bottom") +
   theme(legend.direction='vertical') +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   theme(strip.background = element_rect(colour="black", fill="white")) +
-  guides(colour = guide_legend(nrow = 1, title=""))
+  guides(colour = guide_legend(nrow = 1, title="")) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
 swaziland.ART.calib
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland_ART_scaleup_by_scenario.jpg", height=12, width=9)
+ggsave("swaziland_ART_scaleup_by_scenario.jpg", height=13, width=9)
 
 ################################################
 #ART by risk scenario
@@ -948,6 +1002,7 @@ head(trajectory_ART_calib.master,200)
 trajectory_ART_calib.master$Year2 <- floor((trajectory_ART_calib.master$Year-0.5))
 trajectory_numbersonART <- aggregate(On_ART ~ Year2+Agecat+Gender+sim.id+scenario,
                                          subset(trajectory_ART_calib.master), FUN=sum)
+table(trajectory_numbersonART$scenario)
 trajectory_numbersonART$scenario_f = factor(trajectory_numbersonART$scenario, levels=c('ART100pct','909090',"baseline"))
 
 table(trajectory_numbersonART$scenario_f)
@@ -977,8 +1032,36 @@ swaziland.ART.calib <- ggplot() +
   guides(colour = guide_legend(nrow = 1, title=""))
 swaziland.ART.calib
 
+labs.age <- c("[15,25)"="15-24","[25,35)"="25-34","[35,50)"="35-49")
+table(trajectory_numbersonART$scenario)
+test <- subset(trajectory_numbersonART, scenario=="baseline" | scenario=="ART100pct" | scenario=="909090")
+table(test$scenario)
+trajectory_numbersonART$scenario_f = factor(trajectory_numbersonART$scenario, levels=c('ART100pct','909090',"baseline"))
+swaziland.ART.calib <- ggplot() +
+  geom_smooth(data=subset(test),
+              aes(x=Year2, y=On_ART*scale.factor, group = factor(scenario), color=factor(scenario)), method="loess",span=0.2, se=F, size=1.2) +
+  facet_grid(Agecat~Gender, labeller=labeller(Gender = labs, Agecat=labs.age), scales = "free") +
+  theme(legend.position="bottom") +
+  #geom_hline(aes(yintercept=81)) +
+  xlab("Year")+
+  ylab("Number on ART")+
+  theme_bw(base_size=20) +
+  scale_color_manual(labels = c("Age-targeted 90-90-90 (scenario 4)", "100% ART initation (scenario 5)",  "Status quo (scenario 1)"), values = c("purple", "green", "blue")) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  #scale_y_continuous(limits=c(0,100), breaks = seq(0,100,10), expand=c(0,0)) +
+  scale_x_continuous(limits = c(2000,year), breaks = seq(2000,year,5), expand=c(0,0)) +
+  theme(legend.position="bottom",legend.direction='vertical') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  guides(colour = guide_legend(nrow = 3, title="")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+swaziland.ART.calib
+
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland_numbersonART.byage.gender2_scaleup_by_scenario.jpg", height=8, width=10)
+ggsave("swaziland_numbersonART.byage.gender2_scaleup_by_scenario_new.jpg", height=15, width=9)
 
 #by gender
 head(trajectory_ART_calib.master,200)
@@ -1011,8 +1094,11 @@ swaziland.ART.calib <- ggplot() +
   guides(colour = guide_legend(nrow = 1, title=""))
 swaziland.ART.calib
 
+
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
 ggsave("swaziland_numbersonART.bygender2_scaleup_by_scenario.jpg", height=8, width=10)
+
+
 
 #################################################
 #Risk group sizes
@@ -1464,9 +1550,37 @@ swaziland.transmitters
 ######################################################################################
 ##########################################################################
 #Incidence point estimates at future time-points
+#uses the aggregated reporthivbyageandgender by age-group
 ##########################################################################
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+summary(reporthivbyageandgender.master$Agecat)
 reporthivbyageandgender.master$Uninfected.Population = reporthivbyageandgender.master$Population-reporthivbyageandgender.master$Infected
+reporthivbyageandgender.master$Year2 <- floor(reporthivbyageandgender.master$Year-0.5)
+head(reporthivbyageandgender.master)
 
+#sum new infections over a one year period for each end year (2010, 2016, 2030, and 2050)
+new.infections <- aggregate(Newly.Infected ~ sim.id+scenario+Year2, subset(reporthivbyageandgender.master), FUN=sum)
+pop.uninfected <- aggregate(Uninfected.Population ~ sim.id+scenario+Year, subset(reporthivbyageandgender.master), FUN=sum) 
+pop.uninfected <- pop.uninfected[!duplicated(pop.uninfected[c("Year","sim.id","scenario")]),] #remove second instance of duplicate rows
+pop.uninfected$Year2 <- pop.uninfected$Year
+incidence <- merge(new.infections,pop.uninfected,by=c("Year2","sim.id","scenario"))
+incidence$inc <- incidence$Newly.Infected / incidence$Uninfected.Population
+incidence <- incidence[incidence$Year==2010 | incidence$Year==2016 | incidence$Year==2030 | incidence$Year==2050, c(2:7)]
+incidence.w <- reshape(incidence, timevar = "Year", idvar = c("sim.id","scenario"), direction = "wide")
+incidence.w$rr.2010 <- incidence.w$inc.2010 / incidence.w$inc.2010
+incidence.w$rr.2016 <- incidence.w$inc.2016 / incidence.w$inc.2010
+incidence.w$rr.2030 <- incidence.w$inc.2030 / incidence.w$inc.2010
+incidence.w$rr.2050 <- incidence.w$inc.2050 / incidence.w$inc.2010
+head(incidence.w2)
+incidence.w <- incidence.w[,c(1,2,5,8,11,14:18)]
+incidence.w2 <- reshape(incidence.w, timevar = "scenario", idvar = c("sim.id"), direction = "wide")
+
+quants <- c(0.5,0.025,0.975)
+incidence.w2.q <- apply(incidence.w2[2:ncol(incidence.w2)], 2 ,quantile ,probs = quants)
+
+#flip rows / columns
+
+##########################################################################
 #set years for time in which to calculate incidence. ignore start years, only there for consistent headers
 y1.start = 2010
 y2.start = 2016
@@ -1475,39 +1589,55 @@ y1.end = 2016
 y2.end = 2030
 y3.end = 2050
 
+#sum new infections over a one year period for each end year (2010, 2016, 2030, and 2050)
+new.infections.0 <- aggregate(Newly.Infected ~ sim.id+scenario, subset(reporthivbyageandgender.master, Year==y1.start+0.5 | Year==y1.start+1), FUN=sum)
 new.infections.1 <- aggregate(Newly.Infected ~ sim.id+scenario, subset(reporthivbyageandgender.master, Year==y1.end+0.5 | Year==y1.end+1), FUN=sum)
 new.infections.2 <- aggregate(Newly.Infected ~ sim.id+scenario, subset(reporthivbyageandgender.master, Year==y2.end+0.5 | Year==y2.end+1), FUN=sum)
 new.infections.3 <- aggregate(Newly.Infected ~ sim.id+scenario, subset(reporthivbyageandgender.master, Year==y3.end+0.5 | Year==y3.end+1), FUN=sum)
+new.infections.0.g <- aggregate(Newly.Infected ~ Gender+sim.id+scenario, subset(reporthivbyageandgender.master, Year==y1.start+0.5 | Year==y1.start+1), FUN=sum)
 new.infections.1.g <- aggregate(Newly.Infected ~ Gender+sim.id+scenario, subset(reporthivbyageandgender.master, Year==y1.end+0.5 | Year==y1.end+1), FUN=sum)
 new.infections.2.g <- aggregate(Newly.Infected ~ Gender+sim.id+scenario, subset(reporthivbyageandgender.master, Year==y2.end+0.5 | Year==y2.end+1), FUN=sum)
 new.infections.3.g <- aggregate(Newly.Infected ~ Gender+sim.id+scenario, subset(reporthivbyageandgender.master, Year==y3.end+0.5 | Year==y3.end+1), FUN=sum)
 
+#sum uninfected pop at midyear for the same years
+pop.uninfected.0 <- aggregate(Uninfected.Population ~ sim.id+scenario, subset(reporthivbyageandgender.master,Year==y1.start+0.5), FUN=sum) 
 pop.uninfected.1 <- aggregate(Uninfected.Population ~ sim.id+scenario, subset(reporthivbyageandgender.master,Year==y1.end+0.5), FUN=sum) 
 pop.uninfected.2 <- aggregate(Uninfected.Population ~ sim.id+scenario, subset(reporthivbyageandgender.master,Year==y2.end+0.5), FUN=sum) 
 pop.uninfected.3 <- aggregate(Uninfected.Population ~ sim.id+scenario, subset(reporthivbyageandgender.master,Year==y3.end+0.5), FUN=sum) 
+pop.uninfected.0.g <- aggregate(Uninfected.Population ~ Gender+sim.id+scenario, subset(reporthivbyageandgender.master,Year==y1.start+0.5), FUN=sum) 
 pop.uninfected.1.g <- aggregate(Uninfected.Population ~ Gender+sim.id+scenario, subset(reporthivbyageandgender.master,Year==y1.end+0.5), FUN=sum) 
 pop.uninfected.2.g <- aggregate(Uninfected.Population ~ Gender+sim.id+scenario, subset(reporthivbyageandgender.master,Year==y2.end+0.5), FUN=sum) 
 pop.uninfected.3.g <- aggregate(Uninfected.Population ~ Gender+sim.id+scenario, subset(reporthivbyageandgender.master,Year==y3.end+0.5), FUN=sum) 
 
+#merge new infections with uninfected denominator
+cumulative.incidence.0 <- merge(new.infections.0, pop.uninfected.0, by=c("sim.id","scenario"))
 cumulative.incidence.1 <- merge(new.infections.1, pop.uninfected.1, by=c("sim.id","scenario"))
 cumulative.incidence.2 <- merge(new.infections.2, pop.uninfected.2, by=c("sim.id","scenario"))
 cumulative.incidence.3 <- merge(new.infections.3, pop.uninfected.3, by=c("sim.id","scenario"))
+cumulative.incidence.0.g <- merge(new.infections.0.g, pop.uninfected.0.g, by=c("Gender","sim.id","scenario"))
 cumulative.incidence.1.g <- merge(new.infections.1.g, pop.uninfected.1.g, by=c("Gender","sim.id","scenario"))
 cumulative.incidence.2.g <- merge(new.infections.2.g, pop.uninfected.2.g, by=c("Gender","sim.id","scenario"))
 cumulative.incidence.3.g <- merge(new.infections.3.g, pop.uninfected.3.g, by=c("Gender","sim.id","scenario"))
 
+#calculate incidence
+cumulative.incidence.0$c.inc <- cumulative.incidence.0$Newly.Infected/cumulative.incidence.0$Uninfected.Population
 cumulative.incidence.1$c.inc <- cumulative.incidence.1$Newly.Infected/cumulative.incidence.1$Uninfected.Population
 cumulative.incidence.2$c.inc <- cumulative.incidence.2$Newly.Infected/cumulative.incidence.2$Uninfected.Population
 cumulative.incidence.3$c.inc <- cumulative.incidence.3$Newly.Infected/cumulative.incidence.3$Uninfected.Population
+cumulative.incidence.0.g$c.inc <- cumulative.incidence.0.g$Newly.Infected/cumulative.incidence.0.g$Uninfected.Population
 cumulative.incidence.1.g$c.inc <- cumulative.incidence.1.g$Newly.Infected/cumulative.incidence.1.g$Uninfected.Population
 cumulative.incidence.2.g$c.inc <- cumulative.incidence.2.g$Newly.Infected/cumulative.incidence.2.g$Uninfected.Population
 cumulative.incidence.3.g$c.inc <- cumulative.incidence.3.g$Newly.Infected/cumulative.incidence.3.g$Uninfected.Population
+cumulative.incidence.0$start <- y1.start
+cumulative.incidence.0$end <- y1.start
 cumulative.incidence.1$start <- y1.start
 cumulative.incidence.1$end <- y1.end
 cumulative.incidence.2$start <- y2.start
 cumulative.incidence.2$end <- y2.end
 cumulative.incidence.3$start <- y3.start
 cumulative.incidence.3$end <- y3.end
+cumulative.incidence.0.g$start <- y1.start
+cumulative.incidence.0.g$end <- y1.start
 cumulative.incidence.1.g$start <- y1.start
 cumulative.incidence.1.g$end <- y1.end
 cumulative.incidence.2.g$start <- y2.start
@@ -1515,20 +1645,32 @@ cumulative.incidence.2.g$end <- y2.end
 cumulative.incidence.3.g$start <- y3.start
 cumulative.incidence.3.g$end <- y3.end
 
+#reshame so that each column is scenario- and metric specific
+w.0 <- reshape(cumulative.incidence.0, timevar = "scenario", idvar = "sim.id", direction = "wide")
 w.1 <- reshape(cumulative.incidence.1, timevar = "scenario", idvar = "sim.id", direction = "wide")
 w.2 <- reshape(cumulative.incidence.2, timevar = "scenario", idvar = "sim.id", direction = "wide")
 w.3 <- reshape(cumulative.incidence.3, timevar = "scenario", idvar = "sim.id", direction = "wide")
+w.0.g <- reshape(cumulative.incidence.0.g, timevar = "scenario", idvar = c("sim.id","Gender") , direction = "wide")
 w.1.g <- reshape(cumulative.incidence.1.g, timevar = "scenario", idvar = c("sim.id","Gender") , direction = "wide")
 w.2.g <- reshape(cumulative.incidence.2.g, timevar = "scenario", idvar = c("sim.id","Gender") , direction = "wide")
 w.3.g <- reshape(cumulative.incidence.3.g, timevar = "scenario", idvar = c("sim.id","Gender") , direction = "wide")
 
-master.c.inc <- rbind(w.1,w.2,w.3)
+master.c.inc <- rbind(w.0,w.1,w.2,w.3)
 master.c.inc$Gender <- 2
-master.c.inc.g <- rbind(w.1.g,w.2.g,w.3.g)
+master.c.inc.g <- rbind(w.0.g,w.1.g,w.2.g,w.3.g)
 master.c.inc.c <- rbind(master.c.inc, master.c.inc.g)
-names(master.c.inc.c)
+table(master.c.inc.c$end.noART)
 
-#calculate incidence 
+head(master.c.inc.c)
+names(master.c.inc.c)
+test <- master.c.inc.c[,c(1,4,9,14,19,21,24,27)]
+test$year <- test$end.noART
+head(test)
+test <- test[,c(1:4,6:8)]
+test.w <- reshape(test, timevar = "year", idvar = c("sim.id","Gender") , direction = "wide")
+
+
+#calculate incidence per 100 py
 master.c.inc.c$rinc.baseline <- master.c.inc.c$c.inc.baseline*100
 master.c.inc.c$rinc.noartnovmmc <- master.c.inc.c$c.inc.noARTnoVMMC*100
 master.c.inc.c$rinc.noart <- master.c.inc.c$c.inc.noART*100
@@ -1536,75 +1678,91 @@ master.c.inc.c$rinc.909090 <- master.c.inc.c$c.inc.909090*100
 master.c.inc.c$rinc.ART100pct <- master.c.inc.c$c.inc.ART100pct*100
 head(master.c.inc.c)
 
+#calculate relative risk over time (ref to 2010)
+
+t0 <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t1 <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t2 <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t3 <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
+t0.m <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t1.m <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t2.m <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t3.m <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
+t0.f <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t1.f <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t2.f <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t3.f <- quantile(master.c.inc.c$rinc.baseline[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
-baseline <- as.data.frame(rbind(t1,t2,t3,t1.f,t2.f,t3.f,t1.m,t2.m,t3.m))
-baseline$startyear <- c(y1.start,y2.start,y3.start,y1.start,y2.start,y3.start,y1.start,y2.start,y3.start)
-baseline$endyear <- c(y1.end,y2.end,y3.end,y1.end,y2.end,y3.end,y1.end,y2.end,y3.end)
+baseline <- as.data.frame(rbind(t0,t1,t2,t3,t0.f, t1.f,t2.f,t3.f,t0.m,t1.m,t2.m,t3.m))
+baseline$startyear <- c(y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start)
+baseline$endyear <- c(y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end)
 baseline$scenario <- "ART+VMMC"
+t0 <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t1 <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t2 <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t3 <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
+t0.m <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t1.m <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t2.m <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t3.m <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
+t0.f <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t1.f <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t2.f <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t3.f <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
-novmmcnoart <- as.data.frame(rbind(t1,t2,t3,t1.f,t2.f,t3.f,t1.m,t2.m,t3.m))
-novmmcnoart$startyear <- c(y1.start,y2.start,y3.start,y1.start,y2.start,y3.start,y1.start,y2.start,y3.start)
-novmmcnoart$endyear <- c(y1.end,y2.end,y3.end,y1.end,y2.end,y3.end,y1.end,y2.end,y3.end)
+novmmcnoart <- as.data.frame(rbind(t0,t1,t2,t3,t0.f, t1.f,t2.f,t3.f,t0.m,t1.m,t2.m,t3.m))
+novmmcnoart$startyear <- c(y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start)
+novmmcnoart$endyear <- c(y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end)
 novmmcnoart$scenario <- "noVMMCnoART"
+t0 <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t1 <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t2 <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t3 <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
+t0.m <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t1.m <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t2.m <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t3.m <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
+t0.f <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t1.f <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t2.f <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t3.f <- quantile(master.c.inc.c$rinc.noart[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
-noart <- as.data.frame(rbind(t1,t2,t3,t1.f,t2.f,t3.f,t1.m,t2.m,t3.m))
-noart$startyear <- c(y1.start,y2.start,y3.start,y1.start,y2.start,y3.start,y1.start,y2.start,y3.start)
-noart$endyear <- c(y1.end,y2.end,y3.end,y1.end,y2.end,y3.end,y1.end,y2.end,y3.end)
+noart <- as.data.frame(rbind(t0,t1,t2,t3,t0.f, t1.f,t2.f,t3.f,t0.m,t1.m,t2.m,t3.m))
+noart$startyear <- c(y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start)
+noart$endyear <- c(y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end)
 noart$scenario <- "VMMConly"
+t0 <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t1 <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t2 <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t3 <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
+t0.m <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t1.m <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t2.m <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t3.m <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
+t0.f <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t1.f <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t2.f <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t3.f <- quantile(master.c.inc.c$rinc.909090[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
-age909090 <- as.data.frame(rbind(t1,t2,t3,t1.f,t2.f,t3.f,t1.m,t2.m,t3.m))
-age909090$startyear <- c(y1.start,y2.start,y3.start,y1.start,y2.start,y3.start,y1.start,y2.start,y3.start)
-age909090$endyear <- c(y1.end,y2.end,y3.end,y1.end,y2.end,y3.end,y1.end,y2.end,y3.end)
+age909090 <- as.data.frame(rbind(t0,t1,t2,t3,t0.f, t1.f,t2.f,t3.f,t0.m,t1.m,t2.m,t3.m))
+age909090$startyear <- c(y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start)
+age909090$endyear <- c(y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end)
 age909090$scenario <- "909090"
+t0 <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t1 <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t2 <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
 t3 <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
+t0.m <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t1.m <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t2.m <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
 t3.m <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==0], probs = c(0.5,0.025,0.975)) # quartile
+t0.f <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y1.start & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t1.f <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t2.f <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y2.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
 t3.f <- quantile(master.c.inc.c$rinc.ART100pct[master.c.inc.c$end.noART==y3.end & master.c.inc.c$Gender==1], probs = c(0.5,0.025,0.975)) # quartile
-ART100pct <- as.data.frame(rbind(t1,t2,t3,t1.f,t2.f,t3.f,t1.m,t2.m,t3.m))
-ART100pct$startyear <- c(y1.start,y2.start,y3.start,y1.start,y2.start,y3.start,y1.start,y2.start,y3.start)
-ART100pct$endyear <- c(y1.end,y2.end,y3.end,y1.end,y2.end,y3.end,y1.end,y2.end,y3.end)
+ART100pct <- as.data.frame(rbind(t0,t1,t2,t3,t0.f, t1.f,t2.f,t3.f,t0.m,t1.m,t2.m,t3.m))
+ART100pct$startyear <- c(y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start,y1.start,y1.start,y2.start,y3.start)
+ART100pct$endyear <- c(y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end,y1.start,y1.end,y2.end,y3.end)
 ART100pct$scenario <- "ART100pct"
 
 results.final.incidence <- rbind(baseline,novmmcnoart, noart, age909090 ,ART100pct)
-results.final.incidence$Gender <- c("All","All","All","Female","Female","Female","Male","Male","Male","All","All","All","Female","Female","Female","Male","Male","Male","All","All","All","Female","Female","Female","Male","Male","Male","All","All","All","Female","Female","Female","Male","Male","Male","All","All","All","Female","Female","Female","Male","Male","Male")
-
+results.final.incidence$Gender <- c("All","All","All","All","Female","Female","Female","Female","Male","Male","Male","Male","All","All","All","All","Female","Female","Female","Female","Male","Male","Male","Male","All","All","All","All","Female","Female","Female","Female","Male","Male","Male","Male","All","All","All","All","Female","Female","Female","Female","Male","Male","Male","Male","All","All","All","All","Female","Female","Female","Female","Male","Male","Male","Male")
 ##########################################################################
 #Reduction in cumulative incidence by age and gender
 ##########################################################################
@@ -1844,10 +2002,10 @@ master.c.inc.c <- rbind(master.c.inc, master.c.inc.g)
 names(master.c.inc.c)
 
 #calculate ratio (AR%)
-master.c.inc.c$rinc.noartnovmmc <- (1 - (master.c.inc.c$c.inc.baseline / master.c.inc.c$c.inc.noARTnoVMMC))*100
+master.c.inc.c$rinc.noartnovmmc <- (1 - (master.c.inc.c$c.inc.baseline / master.c.inc.c$c.inc.noART))*100
 master.c.inc.c$rinc.noart <- (1 - (master.c.inc.c$c.inc.noART / master.c.inc.c$c.inc.noARTnoVMMC))*100
-master.c.inc.c$rinc.909090 <- (1 - (master.c.inc.c$c.inc.909090 / master.c.inc.c$c.inc.noARTnoVMMC))*100
-master.c.inc.c$rinc.ART100pct <- (1 - (master.c.inc.c$c.inc.ART100pct / master.c.inc.c$c.inc.noARTnoVMMC))*100
+master.c.inc.c$rinc.909090 <- (1 - (master.c.inc.c$c.inc.909090 / master.c.inc.c$c.inc.noART))*100
+master.c.inc.c$rinc.ART100pct <- (1 - (master.c.inc.c$c.inc.ART100pct / master.c.inc.c$c.inc.noART))*100
 head(master.c.inc.c)
 
 t1 <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
@@ -1977,10 +2135,10 @@ master.c.inc.c <- rbind(master.c.inc, master.c.inc.g)
 names(master.c.inc.c)
 
 #calculate ratio (AR%)
-master.c.inc.c$rinc.noartnovmmc <- (1 - (master.c.inc.c$c.inc.baseline / master.c.inc.c$c.inc.noARTnoVMMC))*100
+master.c.inc.c$rinc.noartnovmmc <- (1 - (master.c.inc.c$c.inc.baseline / master.c.inc.c$c.inc.noART))*100
 master.c.inc.c$rinc.noart <- (1 - (master.c.inc.c$c.inc.noART / master.c.inc.c$c.inc.noARTnoVMMC))*100
-master.c.inc.c$rinc.909090 <- (1 - (master.c.inc.c$c.inc.909090 / master.c.inc.c$c.inc.noARTnoVMMC))*100
-master.c.inc.c$rinc.ART100pct <- (1 - (master.c.inc.c$c.inc.ART100pct / master.c.inc.c$c.inc.noARTnoVMMC))*100
+master.c.inc.c$rinc.909090 <- (1 - (master.c.inc.c$c.inc.909090 / master.c.inc.c$c.inc.noART))*100
+master.c.inc.c$rinc.ART100pct <- (1 - (master.c.inc.c$c.inc.ART100pct / master.c.inc.c$c.inc.noART))*100
 head(master.c.inc.c)
 
 t1 <- quantile(master.c.inc.c$rinc.noartnovmmc[master.c.inc.c$end.noART==y1.end & master.c.inc.c$Gender==2], probs = c(0.5,0.025,0.975)) # quartile
@@ -2039,254 +2197,6 @@ ART100pct$scenario <- "ART100pct"
 results.final.mortality <- rbind(novmmcnoart, noart, age909090 ,ART100pct)
 results.final.mortality$Gender <- c("All","All","All","Female","Female","Female","Male","Male","Male","All","All","All","Female","Female","Female","Male","Male","Male","All","All","All","Female","Female","Female","Male","Male","Male","All","All","All","Female","Female","Female","Male","Male","Male")
 
-##########################################################################
-#Age distribution of cases / incidence
-##########################################################################
-#baseline
-setwd(paste0(wd1))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd1, files)
-length(f)
-
-for (i in seq(1,100,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "baseline"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,23,24)]
-  reporthivbyageandgender <- subset(reporthivbyageandgender, Age > 10 & Age < 50)
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on baseline folder",i))
-  }
-}
-
-reporthivbyageandgender.master.baseline <- reporthivbyageandgender.master
-head(reporthivbyageandgender.master.baseline)
-
-#noART (only VMMC)
-setwd(paste0(wd3))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd3, files)
-length(f)
-
-for (i in seq(1,100,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "noART"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,23,24)]
-  reporthivbyageandgender <- subset(reporthivbyageandgender, Age > 10 & Age < 50)
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on noART folder",i))
-  }
-}
-
-reporthivbyageandgender.master.noART <- reporthivbyageandgender.master
-head(reporthivbyageandgender.master.noART)
-
-#NoARTnoVMMC
-setwd(paste0(wd2))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd2, files)
-length(f)
-
-for (i in seq(1,100,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "noARTnoVMMC"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,23,24)]
-  reporthivbyageandgender <- subset(reporthivbyageandgender, Age > 10 & Age < 50)
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on noARTnoVMMC folder",i))
-  }
-}
-
-reporthivbyageandgender.master.noartnovmmc <- reporthivbyageandgender.master
-head(reporthivbyageandgender.master.noartnovmmc)
-
-#ART100pct
-setwd(paste0(wd6))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd6, files)
-length(f)
-
-for (i in seq(1,100,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "ART100pct"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,23,24)]
-  reporthivbyageandgender <- subset(reporthivbyageandgender, Age > 10 & Age < 50)
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on ART100pct folder",i))
-  }
-}
-reporthivbyageandgender.master.art100 <- reporthivbyageandgender.master
-head(reporthivbyageandgender.master.art100)
-
-reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master.art100,
-                                        reporthivbyageandgender.master.noartnovmmc,
-                                        reporthivbyageandgender.master.noART,
-                                        reporthivbyageandgender.master.baseline)
-table(reporthivbyageandgender.master$scenario)
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL")
-write.csv(reporthivbyageandgender.master, "reporthivbyageandgender.master.age.shifts.csv")
-
-#Age distribution of incidence over time
-reporthivbyageandgender.master$Year2 <- floor((reporthivbyageandgender.master$Year-0.5))
-reporthivbyageandgender.master$Uninfected.Population <- reporthivbyageandgender.master$Population - reporthivbyageandgender.master$Infected
-trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2+Gender+Age+sim.id+scenario, subset(reporthivbyageandgender.master), FUN=sum) #sums number of new infections in each year
-trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year+Gender+Age+sim.id+scenario, subset(reporthivbyageandgender.master), FUN=sum)
-trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
-trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2","Gender","Age", "sim.id","scenario")]),] #remove second instance of duplicate rows
-trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
-trajectories_IR <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","Gender","Age","sim.id","scenario"))
-trajectories_IR$incidence <- trajectories_IR$Newly.Infected / trajectories_IR$Uninfected.Population
-
-#Proportion of cases in each age-group
-head(trajectories_IR)
-newlyinfected.tot <- aggregate(Newly.Infected ~ Year2+Gender+scenario+sim.id, subset(trajectories_IR), sum)
-newlyinfected.merge <- merge(trajectories_IR, newlyinfected.tot, by=c("Year2","Gender","sim.id","scenario"))
-newlyinfected.merge$proportion = newlyinfected.merge$Newly.Infected.x / newlyinfected.merge$Newly.Infected.y
-newlyinfected.merge <- aggregate(proportion ~ Year2+Age+Gender+scenario, subset(newlyinfected.merge), median)
-head(newlyinfected.merge,40)
-
-#plot proportion of new infections by age
-labs <- c("1" = "Women", "0" = "Men")
-table(newlyinfected.merge$scenario)
-labs.scenario <- c("baseline"="Baseline","noART"="VMMC only", "ART100pct"="100% ART","noARTnoVMMC"="No interventions" )
-
-#baseline 1985 - 2005 (pre-intervention)
-year1=1985
-year2=2005
-newinf.age.year <-  ggplot() +
-  geom_line(data=subset(newlyinfected.merge, Year2>=year1 & Year2 <=year2 & scenario=="baseline"), aes(y=proportion*100, x=Age, group=Year2, color=Year2), size=1.2)+ 
-  #scale_colour_gradientn(colours=rainbow(2), breaks = seq(year1,year2,round(((year2-year1)/2),0))) +
-  scale_colour_gradient(low="pink", high="blue", breaks=c(year1,round((year2+year1)/2,0),year2)) +
-  facet_grid(scenario~Gender,labeller=labeller(Gender = labs, scenario=labs.scenario)) +
-  theme(legend.position="bottom") +
-  xlab("Age")+
-  ylab("Percent of new infections")+
-  scale_x_continuous(expand=c(0,0)) +
-  #scale_y_continuous(expand=c(0,0), limits=c(0,7),breaks=seq(0,7,1)) +
-  theme_bw(base_size=16) +
-  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
-  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white"))+
-  theme(legend.title=element_blank()) +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        strip.background = element_blank(),
-        panel.border = element_rect(colour = "black")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-newinf.age.year
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\Adam Incidence Trends\\Final_Plots")
-ggsave("swaziland.modelled.pctnewinfections.byage.jpg", height=6, width=10)
-
-year1=1985
-year2=2005
-
-newinf.age.year <-  ggplot() +
-  geom_line(data=subset(newlyinfected.merge, Year2>=year1 & Year2 <=year2), aes(y=proportion*100, x=Age, group=Year2, color=Year2), size=1.2)+ 
-  #scale_colour_gradientn(colours=rainbow(2), breaks = seq(year1,year2,round(((year2-year1)/2),0))) +
-  scale_colour_gradient(low="pink", high="blue", breaks=c(year1,round((year2+year1)/2,0),year2)) +
-  facet_grid(Gender~scenario,labeller=labeller(Gender = labs, scenario=labs.scenario)) +
-  theme(legend.position="bottom") +
-  xlab("Age")+
-  ylab("Percent of new infections")+
-  scale_x_continuous(expand=c(0,0),limits=c(15,49),breaks=seq(15,49,5)) +
-  #scale_y_continuous(expand=c(0,0), limits=c(0,7),breaks=seq(0,7,1)) +
-  theme_bw(base_size=16) +
-  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
-  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white"))+
-  theme(legend.title=element_blank()) +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        strip.background = element_blank(),
-        panel.border = element_rect(colour = "black")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-newinf.age.year
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\Adam Incidence Trends\\Final_Plots")
-ggsave("swaziland.modelled.pctnewinfections.byage.scenario.19902005.jpg", height=6, width=10)
-
-year1=1985
-year2=2030
-
-newinf.age.year <-  ggplot() +
-  geom_line(data=subset(newlyinfected.merge, Year2>=year1 & Year2 <=year2), aes(y=proportion*100, x=Age, group=Year2, color=Year2), size=1.2)+ 
-  #scale_colour_gradientn(colours=rainbow(2), breaks = seq(year1,year2,round(((year2-year1)/2),0))) +
-  scale_colour_gradient(low="pink", high="blue", breaks=c(year1,round((year2+year1)/2,0),year2)) +
-  facet_grid(Gender~scenario,labeller=labeller(Gender = labs, scenario=labs.scenario)) +
-  theme(legend.position="bottom") +
-  xlab("Age")+
-  ylab("Percent of new infections")+
-  scale_x_continuous(expand=c(0,0),limits=c(15,49),breaks=seq(15,49,5)) +
-  #scale_y_continuous(expand=c(0,0), limits=c(0,7),breaks=seq(0,7,1)) +
-  theme_bw(base_size=16) +
-  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
-  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white"))+
-  theme(legend.title=element_blank()) +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        strip.background = element_blank(),
-        panel.border = element_rect(colour = "black")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-newinf.age.year
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\Adam Incidence Trends\\Final_Plots")
-ggsave("swaziland.modelled.pctnewinfections.byage.scenario.20052030.jpg", height=6, width=10)
-
-#age-specific incidence over time
-incidence.by.age <- aggregate(incidence ~ Year2+Gender+Age+scenario, subset(trajectories_IR), median)
-
-year1=1985
-year2=2030
-
-inc.age.year <-  ggplot() +
-  geom_line(data=subset(incidence.by.age, Year2>=year1 & Year2 <=year2), aes(y=incidence*100, x=Age, group=Year2, color=Year2), size=1.2)+ 
-  #scale_colour_gradientn(colours=rainbow(2), breaks = seq(year1,year2,round(((year2-year1)/2),0))) +
-  scale_colour_gradient(low="pink", high="blue", breaks=c(year1,round((year2+year1)/2,0),year2)) +
-  facet_grid(Gender~scenario,labeller=labeller(Gender = labs, scenario=labs.scenario)) +
-  theme(legend.position="bottom") +
-  xlab("Age")+
-  ylab("Incidence (per 100 py)")+
-  scale_x_continuous(expand=c(0,0)) +
-  #scale_y_continuous(expand=c(0,0), limits=c(0,7),breaks=seq(0,7,1)) +
-  theme_bw(base_size=16) +
-  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
-  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white"))+
-  theme(legend.title=element_blank()) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-      panel.background = element_blank(), axis.line = element_line(colour = "black"))
-  #theme(legend.position="none")
-inc.age.year
-
 ###########################################################################################################
 #Table 2 for paper
 ###########################################################################################################
@@ -2321,6 +2231,7 @@ cumulative.incidence.1.g <- merge(new.infections.1.g, pop.uninfected.1.g, by=c("
 cumulative.incidence.2.g <- merge(new.infections.2.g, pop.uninfected.2.g, by=c("Gender","sim.id","scenario"))
 cumulative.incidence.3.g <- merge(new.infections.3.g, pop.uninfected.3.g, by=c("Gender","sim.id","scenario"))
 
+#calculates proportion of new infections from each age group
 cumulative.incidence.1$c.inc <- cumulative.incidence.1$Newly.Infected.x/cumulative.incidence.1$Newly.Infected.y
 cumulative.incidence.2$c.inc <- cumulative.incidence.2$Newly.Infected.x/cumulative.incidence.2$Newly.Infected.y
 cumulative.incidence.3$c.inc <- cumulative.incidence.3$Newly.Infected.x/cumulative.incidence.3$Newly.Infected.y
@@ -2610,6 +2521,254 @@ swaziland.acute
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
 ggsave("swaziland_pctAcuteTRansmissions_scenarios2.jpg", height=8, width=8)
+
+##########################################################################
+#Age distribution of cases / incidence
+##########################################################################
+#baseline
+setwd(paste0(wd1))
+files <- list.files(full.names = F)
+head(files)
+f <- paste0(wd1, files)
+length(f)
+
+for (i in seq(1,100,1)){
+  reporthivbyageandgender <- read.csv(f[i])
+  reporthivbyageandgender$scenario <- "baseline"
+  reporthivbyageandgender$sim.id <- paste0(files[i])
+  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,23,24)]
+  reporthivbyageandgender <- subset(reporthivbyageandgender, Age > 10 & Age < 50)
+  if (i==1){
+    reporthivbyageandgender.master <- reporthivbyageandgender
+  } else {
+    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
+    print(paste0("Why hello there, I'm working on baseline folder",i))
+  }
+}
+
+reporthivbyageandgender.master.baseline <- reporthivbyageandgender.master
+head(reporthivbyageandgender.master.baseline)
+
+#noART (only VMMC)
+setwd(paste0(wd3))
+files <- list.files(full.names = F)
+head(files)
+f <- paste0(wd3, files)
+length(f)
+
+for (i in seq(1,100,1)){
+  reporthivbyageandgender <- read.csv(f[i])
+  reporthivbyageandgender$scenario <- "noART"
+  reporthivbyageandgender$sim.id <- paste0(files[i])
+  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,23,24)]
+  reporthivbyageandgender <- subset(reporthivbyageandgender, Age > 10 & Age < 50)
+  if (i==1){
+    reporthivbyageandgender.master <- reporthivbyageandgender
+  } else {
+    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
+    print(paste0("Why hello there, I'm working on noART folder",i))
+  }
+}
+
+reporthivbyageandgender.master.noART <- reporthivbyageandgender.master
+head(reporthivbyageandgender.master.noART)
+
+#NoARTnoVMMC
+setwd(paste0(wd2))
+files <- list.files(full.names = F)
+head(files)
+f <- paste0(wd2, files)
+length(f)
+
+for (i in seq(1,100,1)){
+  reporthivbyageandgender <- read.csv(f[i])
+  reporthivbyageandgender$scenario <- "noARTnoVMMC"
+  reporthivbyageandgender$sim.id <- paste0(files[i])
+  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,23,24)]
+  reporthivbyageandgender <- subset(reporthivbyageandgender, Age > 10 & Age < 50)
+  if (i==1){
+    reporthivbyageandgender.master <- reporthivbyageandgender
+  } else {
+    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
+    print(paste0("Why hello there, I'm working on noARTnoVMMC folder",i))
+  }
+}
+
+reporthivbyageandgender.master.noartnovmmc <- reporthivbyageandgender.master
+head(reporthivbyageandgender.master.noartnovmmc)
+
+#ART100pct
+setwd(paste0(wd6))
+files <- list.files(full.names = F)
+head(files)
+f <- paste0(wd6, files)
+length(f)
+
+for (i in seq(1,100,1)){
+  reporthivbyageandgender <- read.csv(f[i])
+  reporthivbyageandgender$scenario <- "ART100pct"
+  reporthivbyageandgender$sim.id <- paste0(files[i])
+  reporthivbyageandgender <- reporthivbyageandgender[,c(1,3,4,7,8,9,10,23,24)]
+  reporthivbyageandgender <- subset(reporthivbyageandgender, Age > 10 & Age < 50)
+  if (i==1){
+    reporthivbyageandgender.master <- reporthivbyageandgender
+  } else {
+    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
+    print(paste0("Why hello there, I'm working on ART100pct folder",i))
+  }
+}
+reporthivbyageandgender.master.art100 <- reporthivbyageandgender.master
+head(reporthivbyageandgender.master.art100)
+
+reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master.art100,
+                                        reporthivbyageandgender.master.noartnovmmc,
+                                        reporthivbyageandgender.master.noART,
+                                        reporthivbyageandgender.master.baseline)
+table(reporthivbyageandgender.master$scenario)
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL")
+write.csv(reporthivbyageandgender.master, "reporthivbyageandgender.master.age.shifts.csv")
+
+#Age distribution of incidence over time
+reporthivbyageandgender.master$Year2 <- floor((reporthivbyageandgender.master$Year-0.5))
+reporthivbyageandgender.master$Uninfected.Population <- reporthivbyageandgender.master$Population - reporthivbyageandgender.master$Infected
+trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2+Gender+Age+sim.id+scenario, subset(reporthivbyageandgender.master), FUN=sum) #sums number of new infections in each year
+trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year+Gender+Age+sim.id+scenario, subset(reporthivbyageandgender.master), FUN=sum)
+trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2","Gender","Age", "sim.id","scenario")]),] #remove second instance of duplicate rows
+trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+trajectories_IR <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","Gender","Age","sim.id","scenario"))
+trajectories_IR$incidence <- trajectories_IR$Newly.Infected / trajectories_IR$Uninfected.Population
+
+#Proportion of cases in each age-group
+head(trajectories_IR)
+newlyinfected.tot <- aggregate(Newly.Infected ~ Year2+Gender+scenario+sim.id, subset(trajectories_IR), sum)
+newlyinfected.merge <- merge(trajectories_IR, newlyinfected.tot, by=c("Year2","Gender","sim.id","scenario"))
+newlyinfected.merge$proportion = newlyinfected.merge$Newly.Infected.x / newlyinfected.merge$Newly.Infected.y
+newlyinfected.merge <- aggregate(proportion ~ Year2+Age+Gender+scenario, subset(newlyinfected.merge), median)
+head(newlyinfected.merge,40)
+
+#plot proportion of new infections by age
+labs <- c("1" = "Women", "0" = "Men")
+table(newlyinfected.merge$scenario)
+labs.scenario <- c("baseline"="Baseline","noART"="VMMC only", "ART100pct"="100% ART","noARTnoVMMC"="No interventions" )
+
+#baseline 1985 - 2005 (pre-intervention)
+year1=1985
+year2=2005
+newinf.age.year <-  ggplot() +
+  geom_line(data=subset(newlyinfected.merge, Year2>=year1 & Year2 <=year2 & scenario=="baseline"), aes(y=proportion*100, x=Age, group=Year2, color=Year2), size=1.2)+ 
+  #scale_colour_gradientn(colours=rainbow(2), breaks = seq(year1,year2,round(((year2-year1)/2),0))) +
+  scale_colour_gradient(low="pink", high="blue", breaks=c(year1,round((year2+year1)/2,0),year2)) +
+  facet_grid(scenario~Gender,labeller=labeller(Gender = labs, scenario=labs.scenario)) +
+  theme(legend.position="bottom") +
+  xlab("Age")+
+  ylab("Percent of new infections")+
+  scale_x_continuous(expand=c(0,0)) +
+  #scale_y_continuous(expand=c(0,0), limits=c(0,7),breaks=seq(0,7,1)) +
+  theme_bw(base_size=16) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white"))+
+  theme(legend.title=element_blank()) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+newinf.age.year
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\Adam Incidence Trends\\Final_Plots")
+ggsave("swaziland.modelled.pctnewinfections.byage.jpg", height=6, width=10)
+
+year1=1985
+year2=2005
+
+newinf.age.year <-  ggplot() +
+  geom_line(data=subset(newlyinfected.merge, Year2>=year1 & Year2 <=year2), aes(y=proportion*100, x=Age, group=Year2, color=Year2), size=1.2)+ 
+  #scale_colour_gradientn(colours=rainbow(2), breaks = seq(year1,year2,round(((year2-year1)/2),0))) +
+  scale_colour_gradient(low="pink", high="blue", breaks=c(year1,round((year2+year1)/2,0),year2)) +
+  facet_grid(Gender~scenario,labeller=labeller(Gender = labs, scenario=labs.scenario)) +
+  theme(legend.position="bottom") +
+  xlab("Age")+
+  ylab("Percent of new infections")+
+  scale_x_continuous(expand=c(0,0),limits=c(15,49),breaks=seq(15,49,5)) +
+  #scale_y_continuous(expand=c(0,0), limits=c(0,7),breaks=seq(0,7,1)) +
+  theme_bw(base_size=16) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white"))+
+  theme(legend.title=element_blank()) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+newinf.age.year
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\Adam Incidence Trends\\Final_Plots")
+ggsave("swaziland.modelled.pctnewinfections.byage.scenario.19902005.jpg", height=6, width=10)
+
+year1=1985
+year2=2030
+
+newinf.age.year <-  ggplot() +
+  geom_line(data=subset(newlyinfected.merge, Year2>=year1 & Year2 <=year2), aes(y=proportion*100, x=Age, group=Year2, color=Year2), size=1.2)+ 
+  #scale_colour_gradientn(colours=rainbow(2), breaks = seq(year1,year2,round(((year2-year1)/2),0))) +
+  scale_colour_gradient(low="pink", high="blue", breaks=c(year1,round((year2+year1)/2,0),year2)) +
+  facet_grid(Gender~scenario,labeller=labeller(Gender = labs, scenario=labs.scenario)) +
+  theme(legend.position="bottom") +
+  xlab("Age")+
+  ylab("Percent of new infections")+
+  scale_x_continuous(expand=c(0,0),limits=c(15,49),breaks=seq(15,49,5)) +
+  #scale_y_continuous(expand=c(0,0), limits=c(0,7),breaks=seq(0,7,1)) +
+  theme_bw(base_size=16) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white"))+
+  theme(legend.title=element_blank()) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+newinf.age.year
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\Adam Incidence Trends\\Final_Plots")
+ggsave("swaziland.modelled.pctnewinfections.byage.scenario.20052030.jpg", height=6, width=10)
+
+#age-specific incidence over time
+incidence.by.age <- aggregate(incidence ~ Year2+Gender+Age+scenario, subset(trajectories_IR), median)
+
+year1=1985
+year2=2030
+
+inc.age.year <-  ggplot() +
+  geom_line(data=subset(incidence.by.age, Year2>=year1 & Year2 <=year2), aes(y=incidence*100, x=Age, group=Year2, color=Year2), size=1.2)+ 
+  #scale_colour_gradientn(colours=rainbow(2), breaks = seq(year1,year2,round(((year2-year1)/2),0))) +
+  scale_colour_gradient(low="pink", high="blue", breaks=c(year1,round((year2+year1)/2,0),year2)) +
+  facet_grid(Gender~scenario,labeller=labeller(Gender = labs, scenario=labs.scenario)) +
+  theme(legend.position="bottom") +
+  xlab("Age")+
+  ylab("Incidence (per 100 py)")+
+  scale_x_continuous(expand=c(0,0)) +
+  #scale_y_continuous(expand=c(0,0), limits=c(0,7),breaks=seq(0,7,1)) +
+  theme_bw(base_size=16) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white"))+
+  theme(legend.title=element_blank()) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+#theme(legend.position="none")
+inc.age.year
 
 #################################################################################################
 #Bring in Transmission data
