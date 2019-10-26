@@ -26,7 +26,7 @@ BASE_POPULATION_SCALE_FACTOR = 0.05  # Original: 0.05, looked ok in catalyst (mi
 EXP_NAME_PATTERN = 'PaperReviewSweepBaseline1--%s--%d'
 
 # TODO: point this to your own windows-styled path containing downloaded base simulation files
-simulation_input_files_dir = 'C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Calibration\\SeparateInput'
+simulation_input_files_dir = 'C:\\Users\\ckirkman\\run\\EMOD_eswatini\\Calibration\\SeparateInput'
 
 
 def update_all_configs(cb, update_values, **kwargs):
