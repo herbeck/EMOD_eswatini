@@ -49,7 +49,7 @@ SWEEPS = [
     # 143 sims per base config
     {
         'name': 'delay_and_supression',                                                                                                                                     # TODO: [min, max), step
-        'mods': [ModFn(update_all_configs, update_values=values) for values in[{'Delay_Period_Mean': x, 'ART_Viral_Suppression_Multiplier': y} for x, y in it.product(range(0, 360+1, 30), np.arange(0, 0.2+0.001, 0.02))]]
+        'mods': [ModFn(update_all_configs, update_values=values) for values in[{'Delay_Period_Mean': x, 'ART_Viral_Suppression_Multiplier': y} for x, y in it.product(range(0, 360+1, 60), np.arange(0, 0.2+0.001, 0.02))]]
     },
 
     # 156 sims per base config
@@ -58,7 +58,7 @@ SWEEPS = [
         'name': 'acuteness',
         'mods': [ModFn(update_all_configs,
                        update_values=values)                                                                                        # TODO: [min, max), step
-                 for values in[{'Acute_Stage_Infectivity_Multiplier': x, 'Acute_Duration_In_Months': y} for x, y in it.product(range(5, 30+1, 1), range(1, 5+1, 1))]]
+                 for values in[{'Acute_Stage_Infectivity_Multiplier': x, 'Acute_Duration_In_Months': y} for x, y in it.product(range(10, 30+1, 5), range(1, 5+1, 1))]]
     }
 ]
 
