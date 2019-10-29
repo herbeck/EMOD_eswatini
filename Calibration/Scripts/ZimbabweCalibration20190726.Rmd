@@ -1,0 +1,136 @@
+---
+title: "Zimbabwe Calibration"
+author: "Kathryn Peebles"
+geometry: margin=1.75cm
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = T, tidy.opts = list(width.cutoff = 60))
+
+# Attach packages
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(data.table)
+library(scales)
+
+# Specify working directory
+input_dir <- "C:/Users/msharma1/Dropbox/run_OptimTool_for_South_Africa_April2019/ARTScenarios/Baseline-campaign_RSA_201903_edited_8_2019-Baseline/ReportHIVByAgeAndGender_8_30_19"
+output_dir <- "C:/Users/msharma1/Dropbox/run_OptimTool_for_South_Africa_April2019/ARTScenarios"
+
+# Specify files to be loaded and analyzed.
+files_b <- list.files(path = input_dir, pattern = "*.csv", full.names = T)
+
+dt_b_list_base <- lapply(files_b, function(x) { as.data.table(read.csv(file = x)[, c("Year", "Gender", "Age", "Population", "Infected", "Newly.Infected", "On_ART")]) })
+```
+
+```{r general_use_objects, echo = F, results = 'hide'}
+source("C:/Users/msharma1/Desktop/ART mortality table/Analysis/R code from Kathryn/Plotting_Functions.R")
+ 
+
+# For plots with absolute numbers, use population scaling factor. In Zimbabwe in 2015, there were 7,953,000 people ages 15-50. Scenarios used a population scaling factor of 0.05
+pop_scale_factor <- 1/0.03333
+
+# Load all empiric data
+dt_prev_obs    <- load_prev_obs()
+#dt_art_cov_obs <- load_art_cov_obs()
+dt_art_num_obs <- load_art_num_obs()
+dt_pop_obs     <- load_pop_obs()
+#dt_inc_obs     <- load_inc_obs()
+```
+
+## Hand calibration: iteration #6
+In the below plots, our template scripts have been modified as follows from the template files used in OptimTool iterations:
+
+* In the Accessibility_And_Risk_IP_Overlay file, there is an individual property "uptake" that was previously set to a maximum of 75%. The "uptake" individual property is now set to a maximum of 100% for all interventions.
+* We currently calibrate to a maximum value for ART linkage and a maximum value for pre-ART linkage. In the below plots, I have replaced all calibrated values to "1".
+* Increased Ramp_Max value for uptake of HCT post-sexual debut from 0.15 to 1 (Event name: "HCTUptakePostDebut: state 2 (Decision to uptake HCT"))  
+* Increased the probability of linking to care from a positive diagnosis from 0.85 to 1 (Event name: "ARTStaging: state 1 (random choice: linking from positive diagnostic test)")  
+* Increased the probability of linking to pre-ART care among individuals not yet eligible for ART from 0.75 to 1. (Event name: "OnPreART: state 1 (random choice: pre-ART or LTFU)")  
+* Among individuals dropping out from ART, reduced probability of being lost forever from 0.25 to 0 (Event name: "OnART: state 4 (Willing to re-enroll in ART?)")
+* In the campaign file, a CD4 threshold of <= 500 remained in effect, though Zimbabwe instituted a policy of treat-all beginning in 2016. The time-value map was previously listed as:
+  + "Threshold": { "Times": [2004.2, 2010.8, 2013.8],
+						       "Values": [200, 350, 500] },
+  + In the below plots, it has been changed to:
+  + "Threshold": { "Times": [2004.2, 2010.8, 2013.8, 2016.5],
+						       "Values": [200, 350, 500, 10000] }
+* Reference tracker is implemented. Any gap in coverage between what is achieved by the cascade of care and the reference tracker will then be filled by randomly selecting HIV-positive individuals to be placed on ART. For the years 2006-2016, ART coverage is sex- and province-specific for ages 15-49. For the year 2016, ART coverage is additionally sex- and age-specific at the national level.
+
+
+```{r prevalence_data, echo = F, results = 'hide'}
+dt_prev_province  <- create_prev_prov_data(dt_list = dt_b_list_base)
+fig_prev_province <- plot_prev_province(dt_sim = dt_prev_province, dt_obs = dt_prev_obs)
+```
+
+```{r prev_province_plot, echo = F, message = F, warning = F, fig.width = 8, fig.height = 9}
+fig_prev_province
+```
+
+```{r prev_national, echo = F, results = 'hide'}
+dt_prev_national <- create_prev_nat_data(dt_list = dt_b_list_base)
+fig_prev_nat     <- plot_prev_national(dt_sim = dt_prev_national, dt_obs = dt_prev_obs)
+ggsave(filename = "C:/Users/msharma1/Dropbox/run_OptimTool_for_South_Africa_April2019/ARTScenarios/HIV Prevalence3.pdf", width = 8, height = 15)
+
+```
+ggsave(filename = "C:/Users/msharma1/Dropbox/run_OptimTool_for_South_Africa_April2019/ARTScenarios/HIV Prevalence.pdf", width = 8, height = 15)
+
+
+```{r prev_national_plot, echo = F, warning = F, message = F, fig.width = 8, fig.height = 10}
+fig_prev_nat
+```
+
+```{r art_coverage_province, echo = F, results = 'hide'}
+dt_art_cov_province  <- create_art_cov_prov_data(dt_list = dt_b_list_base)
+fig_art_cov_province <- plot_art_cov_province(dt_sim = dt_art_cov_province, dt_obs = dt_art_cov_obs)
+```
+
+```{r art_cov_province_plot, echo = F, message = F, warning = F, fig.width = 8, fig.height = 10}
+fig_art_cov_province
+```
+
+```{r art_coverage_national, echo = F, results = 'hide'}
+dt_art_cov_national  <- create_art_cov_nat_data(dt_list = dt_b_list_base)
+fig_art_cov_national <- plot_art_cov_national(dt_sim = dt_art_cov_national)
+```
+
+```{r art_cov_national_plot, echo = F, message = F, warning = F, fig.width = 8, fig.height = 10}
+fig_art_cov_national
+```
+
+```{r art_num, echo  = F, results = 'hide'}
+dt_art_num  <- create_art_num_data(dt_list = dt_b_list_base)
+fig_art_num <- plot_art_num(dt_sim = dt_art_num, dt_obs = dt_art_num_obs)
+```
+
+```{r art_num_plot, echo = F, message = F, warning = F, fig.width = 8, fig.height = 10}
+fig_art_num
+```
+
+```{r population_prov, echo  = F, results = 'hide'}
+dt_pop_prov  <- create_pop_prov_data(dt_list = dt_b_list_base)
+fig_pop_prov <- plot_pop_province(dt_sim = dt_pop_prov, dt_obs = dt_pop_obs)
+```
+
+```{r pop_plot_province, echo = F}
+fig_pop_prov
+```
+&nbsp
+```{r population_national, echo  = F, results = 'hide'}
+dt_pop_national  <- create_pop_nat_data(dt_list = dt_b_list_base)
+fig_pop_national <- plot_pop_national(dt_sim = dt_pop_national, dt_obs = dt_pop_obs)
+```
+
+```{r pop_plot_national, echo = F}
+fig_pop_national
+```
+
+```{r inc, echo = F, results = 'hide'}
+dt_inc  <- create_inc_data(dt_list = dt_b_list_base)
+fig_inc <- plot_inc(dt_sim = dt_inc, dt_obs = dt_inc_obs)
+```
+
+```{r inc_plot, echo = F, message = F, warning = F, fig.width = 7, fig.height = 10}
+fig_inc
+```
