@@ -6,48 +6,1140 @@ library(plyr)
 library(dplyr)
 library(ggplot2)
 library(GGally)
-library(plyr)
+library(dplyr)
 library(mgcv)
 library(data.table)
 library(tidyr)
+library(matrixStats)
+library(stringr)
 
 options(scipen=999)
 
+# baseline sweeps
+
 ##################################################################################################
-#Plot paramter sweeps:
+#Acute Paramter Sweep (includes a 2-dim sweep over acute duration and acute stage multiplier)
+##################################################################################################
+input_dir <- "C:/Users/aakullian/Documents/GitHub/EMOD_eswatini/ParamterSweepOutput_Baseline/acuteness"
+primary_dirs = list.files(input_dir)
+dir = "Acute_Stage_Infectivity_Multiplier-10--Acute_Duration_In_Months-1"
+sub = "045538e9-acf8-e911-a2c3-c4346bcb1551"
+
+inc_values <- data.frame("year"=seq(1980,2056,1))
+median_inc <- data.frame("year"=seq(1980,2056,1))
+i = 0
+
+for(dir in primary_dirs) {
+  sub_folders = list.files(paste(input_dir,dir,sep = "/"))
+  inc_values <- data.frame("year"=seq(1980,2056,1))
+  for(sub in sub_folders){
+    i=i+1
+    temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,sub,"ReportHIVByAgeAndGender.csv",sep="/")))
+    temp_table$Year2 <- floor((temp_table$Year-0.5))
+    temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+    trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+    trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+    trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+    trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+    trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+    trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+    trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+    inc_values$newCol1 <- trajectories_IRoverall$incidence
+    colnames(inc_values)[ncol(inc_values)] <- paste(sub)
+    print(paste("working on sub-folder",sub,"sim",i,sep=" "))
+  }
+  median_inc$val1=rowQuantiles(as.matrix(inc_values[,2:ncol(inc_values)]), probs = 0.5)
+  colnames(median_inc)[ncol(median_inc)] <- paste(str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][1],str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][2], sep=",") 
+  print(paste("working on sub-folder",dir,sep=" "))
+}
+
+head(median_inc)
+rtest <- gather(median_inc, parameter, incidence, `10,1`:`30,5`, factor_key=TRUE)
+acute_stage <- data.frame(within(rtest, parameter<-data.frame(do.call('rbind', strsplit(as.character(parameter), ',', fixed=TRUE)))))
+acute_stage <- data.frame("year"=acute_stage$year,"incidence"=acute_stage$incidence,"acute_multi"=acute_stage$parameter[1], "acute_dur"=acute_stage$parameter[2])
+acute_stage$acute_multi <- acute_stage$X1
+acute_stage$acute_dur <- acute_stage$X2
+acute_stage <- acute_stage[,c(1:2,5:6)]
+head(acute_stage)
+
+acute_stage$acute_multi <- as.numeric(as.character(acute_stage$acute_multi))
+summary(acute_stage$acute_multi)
+acute_stage$acute_dur <- as.numeric(as.character(acute_stage$acute_dur))
+summary(acute_stage$acute_dur)
+
+head(acute_stage)
+
+ggplot() +
+  geom_line(data=subset(acute_stage, acute_dur==3), aes(x=year, y=incidence*100, color=as.factor(acute_multi), group=acute_multi),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2051), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of acute stage infectivity multiplier") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Multiplier on acute stage infectivity"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=3)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_acutemult_acutedur3mo.jpg", height=8, width=8)
+
+ggplot() +
+  geom_line(data=subset(acute_stage, acute_multi==25), aes(x=year, y=incidence*100, color=as.factor(acute_dur), group=acute_dur),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2051), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of acute stage duration") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Acute stage duration in months"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=3)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_acutedur_acutemulti26.jpg", height=8, width=8)
+
+ggplot(data=subset(acute_stage, year==2016 | year==2020 | year == 2030 | year==2050)) +
+  geom_raster(aes(y=as.numeric(as.character(acute_multi)), x=as.numeric(as.character(acute_dur)), fill=incidence*100))+ 
+  geom_point(aes(x=3, y=25), shape=3) +
+  scale_fill_gradient(name="incidence per 100 py", low="blue", high="yellow",breaks=c(0.6,0.8,1,1.2,1.4,1.6)-0.1)+
+  stat_contour(aes(y=acute_multi, x=acute_dur, z=incidence*100),
+               color="black", size=0.1, linetype=1, binwidth=0.1) +
+  theme(legend.position="bottom") +
+  facet_wrap(~year)+
+  xlab("acute phase duration (months)") +
+  ylab("acute phase infectivity")+
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_raster_acute_dur_multi.jpg", height=8, width=8)
+
+##################################################################################################
+#Paramter sweep of ART reduce acquire & delay from infection to ART initiation 
 ##################################################################################################
 
 # Set working directories
-input_dir  <- "C:/Users/aakullian/Dropbox (IDM)/GitHub/EMOD_eswatini"
-output_dir <- "C:/Users/aakullian/Dropbox (IDM)/GitHub/EMOD_eswatini"
+input_dir <- "C:/Users/aakullian/Documents/GitHub/EMOD_eswatini/ParamterSweepOutput_Baseline/delay_and_supression"
+primary_dirs = list.files(input_dir)
+inc_values2 <- data.frame("year"=seq(1980,2056,1))
+median_inc2 <- data.frame("year"=seq(1980,2056,1))
 
-# Acronyms and coding
-# b = baseline, m = medium risk, h = high risk
-# NodeID: 1 = Homa Bay, 2 = Kisii, 3 = Kisumu, 4 = Migori, 5 = Nyamira, 6 = Siaya
+dir="Delay_Period_Mean-60--ART_Viral_Suppression_Multiplier-0.0"
 
-# Specify files to be loaded and analyzed. Reorder in numerical order.
-files_b <- list.files(path = paste0(input_dir), pattern = "*.csv", full.names = T)
-dt_b_list <- lapply(files_b, function(x) as.data.table(read.csv(file = x)))
-dt_b_list[[2]]
-
-#baseline
-setwd(paste0(wd1))
-files <- list.files(full.names = F)
-head(files)
-f <- paste0(wd1, files)
-length(f)
-
-for (i in seq(1,250,1)){
-  reporthivbyageandgender <- read.csv(f[i])
-  reporthivbyageandgender$scenario <- "baseline"
-  reporthivbyageandgender$sim.id <- paste0(files[i])
-  if (i==1){
-    reporthivbyageandgender.master <- reporthivbyageandgender
-  } else {
-    reporthivbyageandgender.master <- rbind(reporthivbyageandgender.master, reporthivbyageandgender)
-    print(paste0("Why hello there, I'm working on baseline folder",i))
+for(dir in primary_dirs) {
+  i=0
+  sub_folders = list.files(paste(input_dir,dir,sep = "/"))
+  inc_values2 <- data.frame("year"=seq(1980,2056,1))
+  for(sub in sub_folders){
+    i=i+1
+    temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,sub,"ReportHIVByAgeAndGender.csv",sep="/")))
+    temp_table$Year2 <- floor((temp_table$Year-0.5))
+    temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+    trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+    trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+    trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+    trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+    trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+    trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+    trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+    inc_values2$newCol1 <- trajectories_IRoverall$incidence
+    colnames(inc_values2)[ncol(inc_values2)] <- paste(sub)
+    print(paste("working on folder", dir, "sub-folder",sub,"sim",i,sep=" "))
   }
+  median_inc2$val1=rowQuantiles(as.matrix(inc_values2[,2:ncol(inc_values2)]), probs = 0.5)
+  colnames(median_inc2)[ncol(median_inc2)] <- paste(str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][1],str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][2], sep=",") 
+  print(paste("working on sub-folder",dir,sep=" "))
 }
+
+rtest <- gather(median_inc2, parameter, incidence, `0,0.0`:`60,0.2`, factor_key=TRUE)
+head(rtest,100)
+ARTeffect <- data.frame(within(rtest, parameter<-data.frame(do.call('rbind', strsplit(as.character(parameter), ',', fixed=TRUE)))))
+ARTeffect <- data.frame("year"=ARTeffect$year,"incidence"=ARTeffect$incidence,"timetoart"=ARTeffect$parameter[1], "artefficacy"=ARTeffect$parameter[2])
+ARTeffect$timetoart <- ARTeffect$X1
+ARTeffect$artefficacy <- ARTeffect$X2
+ARTeffect <- ARTeffect[,c(1:2,5:6)]
+class(ARTeffect$timetoart)
+class(ARTeffect$artefficacy)
+head(ARTeffect)
+
+ARTeffect$timetoart <- as.numeric(as.character(ARTeffect$timetoart))
+summary(ARTeffect$timetoart)
+ARTeffect$artefficacy <- as.numeric(as.character(ARTeffect$artefficacy))
+summary(ARTeffect$artefficacy)
+
+ggplot(data=subset(ARTeffect, timetoart==180)) +
+  geom_line(aes(x=year, y=incidence*100, color=as.factor(artefficacy),group=artefficacy),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2051,10),limits=c(1980,2051), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of ART efficacy") +
+  theme(legend.position="bottom") +
+  guides(fill=guide_legend(title="ART efficacy"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=2)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_artefficacy_timetoart180.jpg", height=8, width=8)
+
+ggplot() +
+  geom_line(data=subset(ARTeffect, artefficacy==0.08), aes(x=year, y=incidence*100, color=factor(timetoart), group=timetoart),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2051), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of time from infection to ART intitation") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Days from infection to treatment", nrow=1))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_timetoart_artefficacy0.08.jpg", height=8, width=8)
+
+ggplot(data=subset(ARTeffect, year==2016 | year==2020 | year == 2030 | year==2050)) +
+  geom_raster(aes(y=timetoart, x=1-artefficacy, fill=incidence*100))+ 
+  geom_point(aes(x=0.92, y=180), shape=3) +
+  scale_fill_gradient(name="incidence per 100 py", low="blue", high="yellow",breaks=c(0.6,0.8,1,1.2,1.4,1.6))+
+  stat_contour(aes(y=timetoart, x=1-artefficacy, z=incidence*100),
+               color="black", size=0.1, linetype=1, binwidth=0.1) +
+  theme(legend.position="bottom") +
+  facet_wrap(~year)+
+  xlab("ART efficacy") +
+  ylab("Time from infection to ART initiation (months)")+
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_raster_arteffic_timetoart.jpg", height=8, width=8)
+
+#save incidence output so it doesn't have to be run again
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps")
+save.image(file="parameter_sweep_baseline.RData")
+load("parameter_sweep_baseline.RData")
+
+
+
+# 100 % ART sweeps
+
+##################################################################################################
+#Acute Paramter Sweep (includes a 2-dim sweep over acute duration and acute stage multiplier)
+##################################################################################################
+input_dir <- "C:/Users/aakullian/Documents/GitHub/EMOD_eswatini/ParamterSweepOutput_100pctART/acuteness"
+primary_dirs = list.files(input_dir)
+
+inc_values3 <- data.frame("year"=seq(1980,2056,1))
+median_inc3 <- data.frame("year"=seq(1980,2056,1))
+i = 0
+
+dir="Acute_Stage_Infectivity_Multiplier-10--Acute_Duration_In_Months-1"
+sub="0b0c6cf3-45fb-e911-a2c3-c4346bcb1551"
+
+for(dir in primary_dirs) {
+  sub_folders = list.files(paste(input_dir,dir,sep = "/"))
+  inc_values3 <- data.frame("year"=seq(1980,2056,1))
+  for(sub in sub_folders){
+    i=i+1
+    temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,sub,"ReportHIVByAgeAndGender.csv",sep="/")))
+    temp_table$Year2 <- floor((temp_table$Year-0.5))
+    temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+    trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+    trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+    trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+    trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+    trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+    trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+    trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+    inc_values3$newCol1 <- trajectories_IRoverall$incidence
+    colnames(inc_values3)[ncol(inc_values3)] <- paste(sub)
+    print(paste("working on sub-folder",sub,"sim",i,sep=" "))
+  }
+  median_inc3$val1=rowQuantiles(as.matrix(inc_values3[,2:ncol(inc_values3)]), probs = 0.5)
+  colnames(median_inc3)[ncol(median_inc3)] <- paste(str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][1],str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][2], sep=",") 
+  print(paste("working on", dir, "sub-folder",dir,sep=" "))
+}
+
+head(median_inc3)
+rtest <- gather(median_inc3, parameter, incidence, `10,1`:`30,5`, factor_key=TRUE)
+acute_stage <- data.frame(within(rtest, parameter<-data.frame(do.call('rbind', strsplit(as.character(parameter), ',', fixed=TRUE)))))
+acute_stage <- data.frame("year"=acute_stage$year,"incidence"=acute_stage$incidence,"acute_multi"=acute_stage$parameter[1], "acute_dur"=acute_stage$parameter[2])
+acute_stage$acute_multi <- acute_stage$X1
+acute_stage$acute_dur <- acute_stage$X2
+acute_stage <- acute_stage[,c(1:2,5:6)]
+head(acute_stage)
+
+acute_stage$acute_multi <- as.numeric(as.character(acute_stage$acute_multi))
+summary(acute_stage$acute_multi)
+acute_stage$acute_dur <- as.numeric(as.character(acute_stage$acute_dur))
+summary(acute_stage$acute_dur)
+
+head(acute_stage)
+
+ggplot() +
+  geom_line(data=subset(acute_stage, acute_dur==3), aes(x=year, y=incidence*100, color=as.factor(acute_multi), group=acute_multi),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2051), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(0,4,1),limits=c(0,4), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of acute stage infectivity multiplier") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Multiplier on acute stage infectivity"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_100ART_acutemult_acutedur3mo.jpg", height=8, width=8)
+
+ggplot() +
+  geom_line(data=subset(acute_stage, acute_multi==25), aes(x=year, y=incidence*100, color=as.factor(acute_dur), group=acute_dur),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2051), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(0,4,1),limits=c(0,4), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of acute stage duration") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Acute stage duration in months"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=3)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_100ART_acutedur_acutemulti26.jpg", height=8, width=8)
+
+summary(acute_stage$incidence[acute_stage$year==2020])
+ggplot(data=subset(acute_stage, year==2016 | year==2020 | year == 2030 | year==2050)) +
+  geom_raster(aes(y=as.numeric(as.character(acute_multi)), x=as.numeric(as.character(acute_dur)), fill=incidence*100))+ 
+  geom_point(aes(x=3, y=25), shape=3) +
+  scale_fill_gradient(name="incidence per 100 py", low="blue", high="yellow",breaks=seq(0.2,1.1,0.15))+
+  stat_contour(aes(y=acute_multi, x=acute_dur, z=incidence*100),
+               color="black", size=0.1, linetype=1, binwidth=0.1) +
+  theme(legend.position="bottom") +
+  facet_wrap(~year)+
+  xlab("acute phase duration (months)") +
+  ylab("acute phase infectivity")+
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_raster100ART_acute_dur_multi.jpg", height=8, width=8)
+
+##################################################################################################
+#Parameter sweep of ART reduce acquire & delay from infection to ART initiation 
+##################################################################################################
+
+# Set working directories
+input_dir <- "C:/Users/aakullian/Documents/GitHub/EMOD_eswatini/ParamterSweepOutput_100pctART/delay_and_supression"
+primary_dirs = list.files(input_dir)
+inc_values4 <- data.frame("year"=seq(1980,2056,1))
+median_inc4 <- data.frame("year"=seq(1980,2056,1))
+
+for(dir in primary_dirs) {
+  i=0
+  sub_folders = list.files(paste(input_dir,dir,sep = "/"))
+  inc_values4 <- data.frame("year"=seq(1980,2056,1))
+  for(sub in sub_folders){
+    i=i+1
+    temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,sub,"ReportHIVByAgeAndGender.csv",sep="/")))
+    temp_table$Year2 <- floor((temp_table$Year-0.5))
+    temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+    trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+    trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+    trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+    trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+    trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+    trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+    trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+    inc_values4$newCol1 <- trajectories_IRoverall$incidence
+    colnames(inc_values4)[ncol(inc_values4)] <- paste(sub)
+    print(paste("working on folder", dir, "sub-folder",sub,"sim",i,sep=" "))
+  }
+  median_inc4$val1=rowQuantiles(as.matrix(inc_values4[,2:ncol(inc_values4)]), probs = 0.5)
+  colnames(median_inc4)[ncol(median_inc4)] <- paste(str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][1],str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][2], sep=",") 
+  print(paste("working on sub-folder",dir,sep=" "))
+}
+
+rtest <- gather(median_inc4, parameter, incidence, `0,0.0`:`60,0.2`, factor_key=TRUE)
+head(rtest,100)
+ARTeffect <- data.frame(within(rtest, parameter<-data.frame(do.call('rbind', strsplit(as.character(parameter), ',', fixed=TRUE)))))
+ARTeffect <- data.frame("year"=ARTeffect$year,"incidence"=ARTeffect$incidence,"timetoart"=ARTeffect$parameter[1], "artefficacy"=ARTeffect$parameter[2])
+ARTeffect$timetoart <- ARTeffect$X1
+ARTeffect$artefficacy <- ARTeffect$X2
+ARTeffect <- ARTeffect[,c(1:2,5:6)]
+class(ARTeffect$timetoart)
+class(ARTeffect$artefficacy)
+head(ARTeffect)
+
+ARTeffect$timetoart <- as.numeric(as.character(ARTeffect$timetoart))
+summary(ARTeffect$timetoart)
+ARTeffect$artefficacy <- as.numeric(as.character(ARTeffect$artefficacy))
+summary(ARTeffect$artefficacy)
+
+ggplot(data=subset(ARTeffect, timetoart==180)) +
+  geom_line(aes(x=year, y=incidence*100, color=as.factor(artefficacy),group=artefficacy),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2051,10),limits=c(1980,2051), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of ART efficacy") +
+  theme(legend.position="bottom") +
+  guides(fill=guide_legend(title="ART efficacy"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=2)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_artefficacy_timetoart180.jpg", height=8, width=8)
+
+ggplot() +
+  geom_line(data=subset(ARTeffect, artefficacy==0.08), aes(x=year, y=incidence*100, color=factor(timetoart), group=timetoart),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2051), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of time from infection to ART intitation") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Days from infection to treatment", nrow=1))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_timetoart_artefficacy0.08.jpg", height=8, width=8)
+
+ggplot(data=subset(ARTeffect, year==2016 | year==2020 | year == 2030 | year==2050)) +
+  geom_raster(aes(y=timetoart, x=1-artefficacy, fill=incidence*100))+ 
+  geom_point(aes(x=0.92, y=180), shape=3) +
+  scale_fill_gradient(name="incidence per 100 py", low="blue", high="yellow",breaks=c(0.6,0.8,1,1.2,1.4,1.6))+
+  stat_contour(aes(y=timetoart, x=1-artefficacy, z=incidence*100),
+               color="black", size=0.1, linetype=1, binwidth=0.1) +
+  theme(legend.position="bottom") +
+  facet_wrap(~year)+
+  xlab("ART efficacy") +
+  ylab("Time from infection to ART initiation (months)")+
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_raster_arteffic_timetoart.jpg", height=8, width=8)
+
+#save incidence output so it doesn't have to be run again
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps")
+save.image(file="parameter_sweep_baseline.RData")
+load("parameter_sweep_baseline.RData")
+
+
+
+
+
+
+
+
+
+##################################################################################################
+#Paramters = Granich et al 2009
+##################################################################################################
+
+# Set working directories
+input_dir <- "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\GranichParmSweeps"
+primary_dirs = list.files(input_dir)
+inc_values5 <- data.frame("Year2"=seq(1980,2056,1))
+
+i=0
+for(dir in primary_dirs) {
+  i=i+1
+  temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,"ReportHIVByAgeAndGender.csv",sep="/")))
+  temp_table$Year2 <- floor((temp_table$Year-0.5))
+  temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+  trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+  trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+  trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+  trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+  trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+  trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+  trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+  trajectories_IRoverall$sim.id <- paste(dir)
+  if (i == 1){
+    inc_values5$incidence=trajectories_IRoverall$incidence
+    inc_values5$sim.id=trajectories_IRoverall$sim.id
+  }
+  else{
+    inc_values5 <- rbind(inc_values5, trajectories_IRoverall[,c(1,4,5)])
+  }
+  print(paste("working on folder", dir,sep=" "))
+}
+
+head(trajectories_IRoverall)
+head(inc_values5)
+
+ggplot(data=subset(inc_values5)) +
+  geom_line(aes(x=Year2, y=incidence*100,group=sim.id),color="lightblue",size=2) +
+  geom_smooth(aes(x=Year2, y=incidence*100),method="loess", span=0.1, se = T, size=1, color="blue", linetype=1) +
+  #geom_line(data=subset(ARTeffect, timetoart==180 & artefficacy==0.08),aes(x=year, y=incidence*100, color=as.factor(1-artefficacy),group=1-artefficacy),size=2) +
+  #geom_line(data=subset(ARTeffect, timetoart==180 & artefficacy==0.08),aes(x=year, y=incidence*100, color=as.factor(1-artefficacy),group=1-artefficacy), color="black", linetype=2,size=2) +
+  geom_hline(yintercept=0.1, linetype="dashed", color = "red", size=1) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=10) +
+  scale_x_continuous(breaks = seq(1980,2051,10),limits=c(1980,2051), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(0,5,1),limits=c(0,5), expand = c(0,0)) +
+  ggtitle("Incidence under Granich et al., 2009 paramterization") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="ART efficacy", nrow=1))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_granich2009_estimates.jpg", height=8, width=8)
+
+
+#Sexual risk behavior report
+
+##################################################################################################
+#ART stages in 100% ART scenario
+##################################################################################################
+
+library(rjson)
+
+#Read in the Accessibility_and_Risk_IP_Overlay
+
+Accessibility_and_Risk_IP_Overlay <- fromJSON(file = "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Calibration\\SeparateInput\\Accessibility_and_Risk_IP_Overlay.json")
+Accessibility_and_Risk_IP_Overlay_json <- toJSON(Accessibility_and_Risk_IP_Overlay)
+
+# Set working directories
+input_dir <- "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Calibration\\SeparateInput\\ART100pctTransmissionCounter"
+primary_dirs = list.files(input_dir)
+dir="01d11cc3-ffd6-e811-a2bd-c4346bcb1555"
+
+for(dir in primary_dirs) {
+  write(Accessibility_and_Risk_IP_Overlay_json, file = paste(input_dir,dir,"Accessibility_and_Risk_IP_Overlay.json",sep="\\"))
+}
+
+#read in reportHIVbyageandgender files
+input_dir <- "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Baseline_transmission_ARTstate"
+primary_dirs = list.files(input_dir)
+inc_values6 <- data.frame("Year2"=seq(1980,2056,1))
+
+i=0
+for(dir in primary_dirs) {
+  i=i+1
+  temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,"ReportHIVByAgeAndGender.csv",sep="/")))
+  temp_table$Year2 <- floor((temp_table$Year-0.5))
+  temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+  trajectories_IR.1a <- aggregate(cbind(Newly.Infected,Transmitters) ~ Year2+IP_Key.ARTstate, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+  trajectories_IR.2 <- aggregate(cbind(Uninfected.Population,Infected,Population) ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+  trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+  trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+  trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+  trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+  trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+  trajectories_IRoverall$sim.id <- paste(dir)
+  if (i == 1){
+    inc_values6 <- trajectories_IRoverall
+  }
+  else{
+    inc_values6 <- rbind(inc_values6, trajectories_IRoverall)
+  }
+  print(paste("working on folder", i, dir,sep=" "))
+}
+
+head(temp_table)
+head(inc_values6,100)
+
+inc_values6.agg <- aggregate(Transmitters ~ Year2+sim.id, inc_values6, FUN=sum)
+inc_values6.agg.m <- merge(inc_values6, inc_values6.agg, by=c("Year2","sim.id"))
+inc_values6.agg.m$IP_Key.ARTstate_P <- inc_values6.agg.m$Transmitters.x / inc_values6.agg.m$Transmitters.y
+inc_values6.agg.m$IP_Key.ARTstate_INC <- inc_values6.agg.m$Transmitters.x / inc_values6.agg.m$Infected
+
+summary(inc_values6.agg.m$IP_Key.ARTstate_P)
+summary(inc_values6.agg.m$IP_Key.ARTstate_INC)
+names(inc_values6.agg.m)
+head(subset(inc_values6.agg.m[c(1,3:8,10:12)],IP_Key.ARTstate_INC>1),100)
+
+#mean value of all sims by year
+table(inc_values6.agg.m$IP_Key.ARTstate_P)
+inc_values6.agg.mean <- aggregate(IP_Key.ARTstate_P ~ IP_Key.ARTstate+Year2, inc_values6.agg.m, FUN=mean)
+head(subset(inc_values6.agg.mean, Year2==2030 | Year2==2050))
+
+table(inc_values6.agg.m$IP_Key.ARTstate)
+inc_values6.agg.m$IP_Key.ARTstate_f <- ordered(inc_values6.agg.m$IP_Key.ARTstate, levels=c("NeverOnART","OnART","OffART"))
+ggplot(data=subset(inc_values6.agg.m)) +
+  geom_line(aes(x=Year2, y=IP_Key.ARTstate_P,group=interaction(IP_Key.ARTstate_f,sim.id), color=IP_Key.ARTstate_f, alpha=0.02),size=1,alpha=0.02) +
+  geom_smooth(aes(x=Year2, y=IP_Key.ARTstate_P, color=IP_Key.ARTstate_f, group=IP_Key.ARTstate_f),method="loess", span=0.2, se=F,size=2) +
+  xlab("Year")+
+  ylab("Proportion of transmissions")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2051,10),limits=c(1980,2051), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(0,1,0.1),limits=c(0,1), expand = c(0,0)) +
+  scale_color_manual(labels = c("Never initiated ART","On ART", "Dropped out from ART"), values = c("red", "blue", "purple")) +
+  ggtitle("Transmissions by ART status of transmitter") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="ART status", nrow=1))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("TransmittersByARTstate_proportions_baseline.jpg", height=8, width=8)
+
+#art scale-up
+i=0
+for(dir in primary_dirs) {
+  i=i+1
+  temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,"ReportHIVByAgeAndGender.csv",sep="/")))
+  art_temp <- aggregate(cbind(On_ART,Infected) ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+  art_temp$ARTcoverage <- art_temp$On_ART / art_temp$Infected
+  art_temp$sim.id <- paste(dir)
+  if (i == 1){
+    art_values1 <- art_temp
+  }
+  else{
+    art_values1 <- rbind(art_values1, art_temp)
+  }
+  print(paste("working on folder", i, dir,sep=" "))
+}
+
+head(art_values1)
+
+ggplot(data=subset(inc_values6.agg.m)) +
+  geom_line(aes(x=Year2, y=IP_Key.ARTstate_P,group=interaction(IP_Key.ARTstate_f,sim.id), color=IP_Key.ARTstate_f, alpha=0.02),size=1,alpha=0.02) +
+  geom_smooth(aes(x=Year2, y=IP_Key.ARTstate_P, color=IP_Key.ARTstate_f, group=IP_Key.ARTstate_f),method="loess", span=0.2, se=F,size=2) +
+  geom_smooth(data=art_values1, aes(x=Year, y=ARTcoverage, color="black"),method="loess", color="black", span=0.2, se=F,size=1,linetype=2) +
+  xlab("Year")+
+  ylab("Proportion of transmissions")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2051,10),limits=c(1980,2051), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(0,1,0.1),limits=c(0,1), expand = c(0,0)) +
+  scale_color_manual(labels = c("Never initiated ART","On ART", "Dropped out from ART", "ART coverage"), values = c("red", "blue", "purple","black")) +
+  ggtitle("Transmissions by ART status of transmitter") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="ART status", nrow=1))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("TransmittersByARTstate_proportions_ARTdata_baseline.jpg", height=8, width=8)
+#################################################################################################
+#Bring in Transmission data
+#################################################################################################
+
+#bring in full saved dataset
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL\\Baseline_TransmissionReport\\TransmissionReport\\")
+transmissionreport.master <- readRDS("transmissionreport.master.rds")
+
+#create variables
+head(transmissionreport.master)
+table(transmissionreport.master$sim.id)
+transmissionreport <- transmissionreport.master[order(transmissionreport.master$sim.id, transmissionreport.master$SRC_ID, transmissionreport.master$YEAR),]
+head(transmissionreport)
+transmissionreport$src_age_int <- floor(transmissionreport$SRC_AGE / 365.25)
+transmissionreport$dest_age_int <- floor(transmissionreport$DEST_AGE / 365.25)
+head(transmissionreport)
+transmissionreport$acquisition <- 1
+transmissionreport <- subset(transmissionreport, dest_age_int > 14 & src_age_int > 14)
+#transmissionreport$age.at.acquisition.cat <- cut(transmissionreport$dest_age_int, c(15,25,35,200), right=F)
+#transmissionreport$age.at.transmission.cat <- cut(transmissionreport$src_age_int, c(15,25,35,200), right=F)
+transmissionreport$year <- transmissionreport$YEAR
+names(transmissionreport)
+
+#################################################################################################
+#Descriptive stats
+#################################################################################################
+# #baseline transmission report from one run:
+# wd13 <- "C:\\Users\\aakullian\\Dropbox (IDM)\\HIV\\EMOD\\Swaziland_05June2018\\Scenarios_calibration_run3_v05Sep2018_newcampaign_FINAL\\ScenariosOct_FINAL\\Baseline_TransmissionReport\\TransmissionReport\\"
+# setwd(paste0(wd13))
+# files <- list.files(full.names = F)
+# head(files)
+# f <- paste0(wd13, files)
+# length(f)
+# i = 2
+# 
+# transmissionreport.master <- read.csv(f[i])
+# transmissionreport.master$scenario <- "baseline"
+# transmissionreport.master$sim.id <- paste0(files[i])
+# names(transmissionreport)
+# table(transmissionreport$DEST_INFECTED) #all are infected
+# table(transmissionreport$SRC_VIRAL_LOAD)
+# library(tableone)
+# 
+# #CREATE DATA FRAME OF acquisitions (the destination of transmissions)
+# acquisitions <- data.frame("sim.id"=transmissionreport$sim.id, "ID" = transmissionreport$DEST_ID, "dest.gender"=transmissionreport$DEST_GENDER, "year.acq" = floor(transmissionreport$year), "age.at.acq" = floor(transmissionreport$dest_age_int),
+#                            "current_relationship_count" = transmissionreport$DEST_current_relationship_count,
+#                            "lifetime_relationship_count" = transmissionreport$DEST_lifetime_relationship_count,
+#                            "relationships_in_last_6_months" = transmissionreport$DEST_relationships_in_last_6_months,
+#                            "circumcised" = transmissionreport$DEST_CIRCUMSIZED,
+#                            "sti"=transmissionreport$DEST_STI,
+#                            "sourcestage"=transmissionreport$SRC_STAGE,
+#                            "sourceCD4"=transmissionreport$SRC_CD4)
+# acquisitions <- acquisitions[order(acquisitions$sim.id, acquisitions$ID, acquisitions$year.acq),]
+# acquisitions$Gender[acquisitions$dest.gender==1] <- "Female"
+# acquisitions$Gender[acquisitions$dest.gender==0] <- "Male"
+# head(acquisitions)
+# 
+# ## Create a variable list
+# vars <- c("year.acq","age.at.acq","Gender","current_relationship_count","lifetime_relationship_count",
+#           "relationships_in_last_6_months","sti","circumcised","sourcestage","sourceCD4")
+# 
+# catVars <- c("sti","circumcised","sourcestage")
+# 
+# ## Create Table 1 stratified by trt
+# tableOne <- CreateTableOne(vars = vars, factorVars = catVars, strata = c("Gender"), data = acquisitions)
+# tableOne
+
+#################################################################################################
+#Time from infection until transmission by age and sex year and scenario + Proportion acute / early
+#################################################################################################
+
+#CREATE DATA FRAME OF DESTINATION TRANSMISSIONS AS THE SOURCE OF FUTURE TRANSMISSIONS
+source.df <- data.frame("sim.id"=transmissionreport$sim.id, "SRC_ID" = transmissionreport$DEST_ID, "src.gender"=transmissionreport$DEST_GENDER, "year.acq" = transmissionreport$year, "age.at.acq" = floor(transmissionreport$dest_age_int))
+source.df <- source.df[order(source.df$sim.id, source.df$SRC_ID, source.df$year.acq),]
+
+#merge in source infection date and age and keep those who did not transmit
+transmissionreport.merge <- merge(transmissionreport, source.df, by=c("sim.id","SRC_ID")) #only keep matching records (missing ones will be those seeded in and transmissions from those infected at birth) 
+transmissionreport.merge <- transmissionreport.merge[order(transmissionreport.merge$sim.id, transmissionreport.merge$SRC_ID, transmissionreport.merge$year),]
+head(transmissionreport.merge,10)
+transmissionreport.merge$yrs.to.transmit <- transmissionreport.merge$year - transmissionreport.merge$year.acq
+transmissionreport.merge$yrs.to.transmit.cat <- cut(transmissionreport.merge$yrs.to.transmit, c(0,1,5,200), right=F)
+transmissionreport.merge$transmission <- 1
+transmissionreport.merge$acute <- 0
+transmissionreport.merge$acute[transmissionreport.merge$SRC_STAGE==1] <- 1
+transmissionreport.merge$early <- 0
+transmissionreport.merge$early[transmissionreport.merge$yrs.to.transmit.cat=="[0,1)"] <- 1
+head(transmissionreport.merge,100)
+transmissionreport.merge$year.fl <- floor(transmissionreport.merge$year)
+
+#aggregate the number of transmissions by sim.id and year
+transmissionreport.acute <- aggregate(cbind(transmission,acute) ~ sim.id+year.fl+SRC_GENDER, transmissionreport.merge, sum) #number of transmissions by gender, year
+transmissionreport.acute$stage <- "acute"
+transmissionreport.acute$p.transmission <- transmissionreport.acute$acute / transmissionreport.acute$transmission
+head(transmissionreport.acute)
+transmissionreport.acute <- transmissionreport.acute[,c(1:3,6,7)]
+transmissionreport.early <- aggregate(cbind(transmission,early) ~ sim.id+year.fl+SRC_GENDER, transmissionreport.merge, sum) #number of transmissions by gender, year
+transmissionreport.early$stage <- "early"
+transmissionreport.early$p.transmission <- transmissionreport.early$early / transmissionreport.early$transmission
+transmissionreport.early <- transmissionreport.early[,c(1:3,6,7)]
+transmissions.acute.early <- rbind(transmissionreport.early,transmissionreport.acute)
+head(transmissions.acute.early,5)
+table(transmissions.acute.early$sim.id)
+
+#Proportion of transmissions by time-cat
+labs <- c("1" = "Women", "0" = "Men")
+head(transmissions.acute.early)
+p.transmission.time.cat <- ggplot(transmissions.acute.early) +
+  geom_smooth(aes(x=year.fl, y=p.transmission, color=stage),method="loess", span=0.3, se = F, size=1.2, linetype=1) +
+  geom_line(aes(x=year.fl, y=p.transmission, color=stage, group=interaction(sim.id, stage)), alpha=0.02)+ 
+  facet_grid(~SRC_GENDER, labeller=labeller(SRC_GENDER = labs)) +
+  xlab("Year") +
+  ylab("Proportion of transmissions") +
+  scale_x_continuous(limits = c(1984, 2050), breaks=seq(1985,2045,5),expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 0.6), breaks=seq(0,1,0.1),expand=c(0,0)) +
+  # guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  scale_color_manual(labels = c("acute","early"), values = c("red","blue")) +
+  theme_bw(base_size=20) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(legend.title=element_blank())+
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p.transmission.time.cat
+
+loess <- loess(p.transmission ~ year.fl, subset(transmissions.acute.early, SRC_GENDER==0 & stage=="acute"), span=0.3)
+predict(loess, data.frame(year.fl = 2030, se = F))
+loess <- loess(p.transmission ~ year.fl, subset(transmissions.acute.early, SRC_GENDER==0 & stage=="early"), span=0.3)
+predict(loess, data.frame(year.fl = 2030, se = F))
+
+loess <- loess(p.transmission ~ year.fl, subset(transmissions.acute.early, SRC_GENDER==1 & stage=="acute"), span=0.3)
+predict(loess, data.frame(year.fl = 2030, se = F))
+loess <- loess(p.transmission ~ year.fl, subset(transmissions.acute.early, SRC_GENDER==1 & stage=="early"), span=0.3)
+predict(loess, data.frame(year.fl = 2030, se = F))
+
+###########################################################################################################
+#Transmission pair formation
+###########################################################################################################
+head(transmissionreport,5)
+table(transmissionreport$scenario)
+
+#Set the gender of the destination:
+transmissionreport$Gender[transmissionreport$SRC_GENDER==0] <- "Female"
+transmissionreport$Gender[transmissionreport$SRC_GENDER==1] <- "Male"
+transmissionreport$year.cat <- cut(transmissionreport$year, c(1980,1990,2000,2010,2020,2030,2040,2050), dig.lab=4, right=F)
+transmissionreport$year.fl <- floor(transmissionreport$year)
+
+#Proportion of all *acquisisions* in each year from each age/gender group
+p.new.infection <- aggregate(acquisition ~ sim.id+year.fl+Gender, transmissionreport, FUN=sum)
+p.new.infection.age.gender <- aggregate(acquisition ~ sim.id+year.fl+Gender+dest_age_int, transmissionreport, FUN=sum)
+p.new.infection.age.gender.merge <- merge(p.new.infection.age.gender,p.new.infection, by=c("sim.id","year.fl","Gender"))
+p.new.infection.age.gender.merge$prop <- p.new.infection.age.gender.merge$acquisition.x / p.new.infection.age.gender.merge$acquisition.y
+head(p.new.infection)
+head(p.new.infection.age.gender.merge)
+
+#Calculate the median probability of transmissions by pair across all 250 sims
+transmissionreport.n.median <- aggregate(prop ~ year.fl+Gender+dest_age_int, p.new.infection.age.gender.merge, median) #take the median of 250 sims
+head(transmissionreport.n.median)
+hiv.acquisitions <- transmissionreport.n.median
+hiv.acquisitions$direction <- "acquisitions"
+
+year1=2005
+year2=2050
+labs.gender <- c("1" = "Women", "0" = "Men")
+p.age.dist.transmissions <- ggplot(subset(transmissionreport.n.median, year.fl >= year1 & year.fl <= year2)) +
+  geom_smooth(aes(x=dest_age_int, y=prop*100, color=year.fl, group=year.fl),method="loess", span=0.8, se = F, size=1, linetype=1) +
+  facet_grid(~Gender) +
+  scale_colour_gradientn(colours=rainbow(2),guide = guide_colourbar(barwidth=30, barheight=1), breaks=seq(year1,year2,10)) +
+  #scale_colour_gradientn(colours=rainbow(2),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,2),year2), guide_colorbar(barheight = 30)) +
+  xlab("Age") +
+  ylab("Percent of new HIV acquisitions") +
+  scale_x_continuous(limits = c(15, 75), breaks=seq(15,70,5),expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 6),expand=c(0,0)) +
+  theme_bw(base_size=20) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  theme(legend.title=element_blank())+
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p.age.dist.transmissions
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("swaziland_acquisitions_by_age_year_20052050.jpg", height=8, width=10)
+
+#Proportion of all *transmissions* in each year from each age/gender group
+p.new.infection <- aggregate(acquisition ~ sim.id+year.fl+SRC_GENDER, transmissionreport, FUN=sum)
+p.new.infection.age.gender <- aggregate(acquisition ~ sim.id+year.fl+SRC_GENDER+src_age_int, transmissionreport, FUN=sum)
+p.new.infection.age.gender.merge <- merge(p.new.infection.age.gender,p.new.infection, by=c("sim.id","year.fl","SRC_GENDER"))
+p.new.infection.age.gender.merge$prop <- p.new.infection.age.gender.merge$acquisition.x / p.new.infection.age.gender.merge$acquisition.y
+head(p.new.infection)
+head(p.new.infection.age.gender.merge)
+
+#Calculate the median probability of transmissions by pair across all 250 sims
+transmissionreport.n.median <- aggregate(prop ~ year.fl+SRC_GENDER+src_age_int, p.new.infection.age.gender.merge, median) #take the median of 250 sims
+head(transmissionreport.n.median)
+
+hiv.transmissions <- transmissionreport.n.median
+hiv.transmissions$direction <- "transmission"
+
+year1=2005
+year2=2050
+labs.gender <- c("0" = "Male","1" = "Female")
+p.age.dist.transmissions <- ggplot(subset(transmissionreport.n.median, year.fl >= year1 & year.fl <= year2)) +
+  geom_smooth(aes(x=src_age_int, y=prop*100, color=year.fl, group=year.fl),method="loess", span=0.8, se = F, size=1, linetype=1) +
+  facet_grid(~SRC_GENDER, labeller=labeller(SRC_GENDER = labs.gender)) +
+  scale_colour_gradientn(colours=rainbow(2),guide = guide_colourbar(barwidth=30, barheight=1), breaks=seq(year1,year2,10)) +
+  #scale_colour_gradientn(colours=rainbow(2),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,2),year2), guide_colorbar(barheight = 30)) +
+  xlab("Age") +
+  ylab("Percent of new HIV transmissions") +
+  scale_x_continuous(limits = c(15, 75), breaks=seq(15,70,5),expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 6),expand=c(0,0)) +
+  theme_bw(base_size=20) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  theme(legend.title=element_blank())+
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p.age.dist.transmissions
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland_transmissions_by_age_year_20042050.jpg", height=8, width=10)
+
+
+hiv.transmissions$age <- hiv.transmissions$src_age_int
+hiv.transmissions$sex <- hiv.transmissions$SRC_GENDER
+hiv.acquisitions$age <- hiv.acquisitions$dest_age_int
+hiv.transmissions$sex <- "Female"
+hiv.transmissions$sex[hiv.transmissions$SRC_GENDER==0] <- "Male"
+
+head(hiv.transmissions)
+head(hiv.acquisitions)
+combined <- rbind(hiv.acquisitions[,c(1,4,5,6,7)], hiv.transmissions[,c(1,4,5,6,7)])
+table(combined$sex)
+
+year1=2005
+year2=2050
+labs.gender <- c("0" = "Male","1" = "Female")
+p.age.combined <- ggplot(subset(combined, year.fl >= year1 & year.fl <= year2)) +
+  geom_smooth(aes(x=age, y=prop*100, color=year.fl, group=year.fl),method="loess", span=0.8, se = F, size=1, linetype=1) +
+  facet_grid(direction~sex) +
+  scale_colour_gradientn(colours=rainbow(2),guide = guide_colourbar(barwidth=30, barheight=1), breaks=seq(year1,year2,10)) +
+  xlab("Age") +
+  ylab("Percent of new HIV acquisitions / transmissions") +
+  scale_x_continuous(limits = c(15, 75), breaks=seq(15,70,5),expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 6),expand=c(0,0)) +
+  theme_bw(base_size=20) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  theme(legend.title=element_blank())+
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p.age.combined
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland_transmissions_by_age_year_20042050.jpg", height=8, width=10)
+
+agex.min = 15
+agex.max = 49
+agey.min = 15
+agey.max = 54
+limits = c(0,max(transmissionreport.n.median$prop))
+breaks = seq(0, max(transmissionreport.n.median$prop), max(transmissionreport.n.median$prop)/6)
+breaks=round(breaks, 3)
+
+TransmissionMatrixPlot <-  ggplot() +
+  geom_raster(data=subset(transmissionreport.n.median, Gender=="Male"), aes(y=dest_age_int, x=src_age_int, fill=prop*100))+ 
+  scale_fill_gradientn(name="% of transmissions",
+                       colours=c("darkblue","blue","yellow","darkred"),
+                       limits=limits*100,
+                       breaks=breaks*100) +
+  # stat_contour(data=subset(transmissionreport.n.median, Gender=="Female" & year.cat=="[1980,2005)"), aes(y=dest_age_int, x=src_age_int, z=prop*100),
+  #              color="black", size=0.1, linetype=1, binwidth=0.05) +
+  facet_grid(~year) +
+  geom_abline(intercept = 0, slope = 1, linetype=2) +
+  theme(legend.position="bottom") +
+  xlab("Age of source")+
+  ylab("Age of destination")+
+  scale_x_continuous(expand=c(0,0), breaks=seq(agex.min,agex.max,5), limits=c(agex.min,agex.max)) +
+  scale_y_continuous(expand=c(0,0), breaks=seq(agey.min,agey.max,5), limits=c(agey.min,agey.max)) +
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(legend.position="top") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+TransmissionMatrixPlot
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("swaziland_TransmissionByAgePairing_year_baseline_Male.jpg", height=5, width=17)
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("transmissions.by.age.gender.year.jpg", height=8, width=8)
+
+head(transmissionreport,100)
+p.new.infection <- aggregate(acquisition ~ year+SRC_GENDER, transmissionreport, FUN=sum)
+p.new.infection.age.gender <- aggregate(acquisition ~ year + src_age_int + SRC_GENDER, transmissionreport, FUN=sum)
+p.new.infection.age.gender <- merge(p.new.infection.age.gender,p.new.infection, by=c("year", "SRC_GENDER"))
+p.new.infection.age.gender$prop <- p.new.infection.age.gender$acquisition.x / p.new.infection.age.gender$acquisition.y
+head(p.new.infection.age.gender)
+
+year1=1985
+year2=2050
+labs <- c("1" = "Women", "0" = "Men")
+p.age.dist.transmissions <- ggplot(subset(p.new.infection.age.gender, year >= year1 & year <= year2)) +
+  geom_smooth(aes(x=src_age_int, y=prop, color=year, group=year),method="loess", span=0.6, se = F, size=1, linetype=1) +
+  facet_grid(~SRC_GENDER, labeller=labeller(SRC_GENDER = labs)) +
+  scale_colour_gradientn(colours=rainbow(2),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,2),year2)) +
+  xlab("Year") +
+  ylab("Proportion of Transmissions") +
+  scale_x_continuous(limits = c(15, 100), breaks=seq(15,80,10),expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 0.06), breaks=seq(0,0.06,0.01),expand=c(0,0)) +
+  theme_bw(base_size=20) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  theme(legend.title=element_blank())+
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+p.age.dist.transmissions
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("transmissions.by.agecontinuous.gender.year.jpg", height=8, width=12)
+
+#noART
+scenario="noART"
+limits = c(0,max(TransmissionMatrix.master.median$prop[TransmissionMatrix.master.median$scenario==scenario]*100))
+breaks = seq(0, max(TransmissionMatrix.master.median$prop[TransmissionMatrix.master.median$scenario==scenario]*100), max(TransmissionMatrix.master.median$prop[TransmissionMatrix.master.median$scenario==scenario]*100)/6)
+breaks=round(breaks, 2)
+TransmissionMatrixPlot <-  ggplot() +
+  geom_raster(data=subset(TransmissionMatrix.master.median, scenario=="noART"), aes(y=dest_age_int, x=src_age_int, fill=prop*100))+ 
+  scale_fill_gradientn(name="Perecent of all transmissions",
+                       colours=c("darkblue","blue","yellow","darkred"),
+                       limits=limits,
+                       breaks=breaks) +
+  # stat_contour(data=subset(TransmissionMatrix.master.median, scenario==scenario), aes(y=dest_age_int, x=src_age_int, z=prop*100),  
+  #              color="black", size=0.1, linetype=1, binwidth=0.1) +
+  facet_grid(Gender~year.cat) +
+  geom_abline(intercept = 0, slope = 1, linetype=2) +
+  theme(legend.position="bottom") +
+  xlab("Age of source")+
+  ylab("Age of destination")+
+  scale_x_continuous(expand=c(0,0), breaks=seq(agex.min,agex.max,5), limits=c(agex.min,agex.max)) +
+  scale_y_continuous(expand=c(0,0), breaks=seq(agey.min,agey.max,5), limits=c(agey.min,agey.max)) +
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white"))
+TransmissionMatrixPlot
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("swaziland_TransmissionByAgePairing_year_noART.jpg", height=10, width=18)
+
+#noART
+scenario="noARTnoVMMC"
+limits = c(0,max(TransmissionMatrix.master.median$prop[TransmissionMatrix.master.median$scenario==scenario]*100))
+breaks = seq(0, max(TransmissionMatrix.master.median$prop[TransmissionMatrix.master.median$scenario==scenario]*100), max(TransmissionMatrix.master.median$prop[TransmissionMatrix.master.median$scenario==scenario]*100)/6)
+breaks=round(breaks, 2)
+TransmissionMatrixPlot <-  ggplot() +
+  geom_raster(data=subset(TransmissionMatrix.master.median, scenario=="noARTnoVMMC"), aes(y=dest_age_int, x=src_age_int, fill=prop*100))+ 
+  scale_fill_gradientn(name="Perecent of all transmissions",
+                       colours=c("darkblue","blue","yellow","darkred"),
+                       limits=limits,
+                       breaks=breaks) +
+  # stat_contour(data=subset(TransmissionMatrix.master.median, scenario==scenario), aes(y=dest_age_int, x=src_age_int, z=prop*100),  
+  #              color="black", size=0.1, linetype=1, binwidth=0.1) +
+  facet_grid(Gender~year.cat) +
+  geom_abline(intercept = 0, slope = 1, linetype=2) +
+  theme(legend.position="bottom") +
+  xlab("Age of source")+
+  ylab("Age of destination")+
+  scale_x_continuous(expand=c(0,0), breaks=seq(agex.min,agex.max,5), limits=c(agex.min,agex.max)) +
+  scale_y_continuous(expand=c(0,0), breaks=seq(agey.min,agey.max,5), limits=c(agey.min,agey.max)) +
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white"))
+TransmissionMatrixPlot
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("swaziland_TransmissionByAgePairing_year_noARTnoVMMC.jpg", height=10, width=18)
+
+###############################################################################
+#What is the average time until first transmission by age at acquisition and gender?
+###############################################################################
+names(transmissionreport.merge)
+transmissionreport.merge <- transmissionreport.merge[order(transmissionreport.merge$SRC_ID, transmissionreport.merge$yrs.to.transmit),]
+transmissionreport.merge$num <- ave(transmissionreport.merge$acquisition, transmissionreport.merge$SRC_ID, FUN=seq_along)
+head(transmissionreport.merge,15)
+time.to.first.transmission <- aggregate(yrs.to.transmit ~ src.gender + year.acq.int, subset(transmissionreport.merge, num==1), FUN=mean)
+head(time.to.first.transmission)
+
+time.to.first.transmission.plot <- ggplot() +
+  geom_smooth(data = time.to.first.transmission, aes(x=year.acq.int, y=yrs.to.transmit, color=factor(src.gender), group=factor(src.gender)),method="loess", span=0.5, se = F, size=1.2, linetype=1) +
+  geom_point(data = time.to.first.transmission, size=1.2, aes(x = year.acq.int, y=yrs.to.transmit, color=factor(src.gender), group=factor(src.gender)))+ 
+  xlab("Year of HIV acquisition") +
+  ylab("Mean time from acquisition to transmission (years)") +
+  scale_x_continuous(limits = c(1985, 2030), breaks=seq(1985,2029,5),expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 15), breaks=seq(0,15,1),expand=c(0,0)) +
+  # guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  scale_color_manual(labels = c("Men","Women"), values = c("blue","red")) +
+  theme_bw(base_size=20) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(legend.title=element_blank())+
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+time.to.first.transmission.plot
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("meantimefromacquisitiontotransmission.jpg", height=10, width=10)
+
+names(transmissionreport.merge)
+transmissionreport.merge <- transmissionreport.merge[order(transmissionreport.merge$SRC_ID, transmissionreport.merge$yrs.to.transmit),]
+transmissionreport.merge$num <- ave(transmissionreport.merge$acquisition, transmissionreport.merge$SRC_ID, FUN=seq_along)
+head(transmissionreport.merge,15)
+
+time.to.first.transmission.plot <-
+  ggplot(transmissionreport.merge, aes(x=factor(year.acq.int), y=yrs.to.transmit, fill=factor(src.gender)))+
+  geom_boxplot(notch=FALSE, outlier.shape=NA, alpha=0.2,outlier.size = 0, coef=0)+
+  xlab("Year of HIV acquisition") +
+  ylab("Mean time from acquisition to transmission (years)") +
+  facet_grid(~src.gender,labeller=labeller(src.gender = labs)) +
+  #scale_x_continuous(limits = c(1985, 2030), breaks=seq(1985,2029,5),expand=c(0,0)) +
+  scale_y_continuous(limits = c(0, 25), breaks=seq(0,25,5),expand=c(0,0)) +
+  #guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  #scale_color_manual(labels = c("Men","Women"), values = c("blue","red")) +
+  scale_fill_manual(values = c("blue", "red")) +
+  theme_bw(base_size=20) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="bottom") +
+  theme(legend.title=element_blank())+
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+time.to.first.transmission.plot
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+ggsave("meantimefromacquisitiontotransmission.jpg", height=10, width=10)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -83,7 +1175,7 @@ stack(lapply(infile.parms, quantile, prob = c(0.25,0.5,0.75), names = T))
 infile.parms %>%
   summarise_all(funs(list(quantile(., probs = c(0.5,0.25,0.75) )))) %>%
   gather("Column", "Median p25 p75")
-  
+
 #reshape to create ggplots of histograms
 ggplot(gather(infile.parms), aes(value)) + 
   geom_histogram(bins = 10, fill="white", col="black") + 
@@ -134,10 +1226,117 @@ reporthivbyageandgender.master <- read.csv("reporthivbyageandgender.master.final
 table(reporthivbyageandgender.master$scenario)
 table(reporthivbyageandgender.master$Agecat)
 head(reporthivbyageandgender.master)
+
 # #bring in risk scenarios
 # reporthivbyageandgender.master.final.risk <- read.csv("reporthivbyageandgender.master.final.risk.csv")
 # head(reporthivbyageandgender.master.final.risk)
 
+#Calculate Incidence overall from condensed
+table(reporthivbyageandgender.master$Agecat)
+reporthivbyageandgender.master.final <- reporthivbyageandgender.master
+reporthivbyageandgender.master.final$Year2 <- floor((reporthivbyageandgender.master.final$Year-0.5))
+reporthivbyageandgender.master.final$Uninfected.Population = reporthivbyageandgender.master.final$Population-reporthivbyageandgender.master.final$Infected
+trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2+sim.id+scenario, subset(reporthivbyageandgender.master.final), FUN=sum) #sums number of new infections in each year
+trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year+sim.id+scenario, subset(reporthivbyageandgender.master.final), FUN=sum)
+trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2","sim.id","scenario")]),] #remove second instance of duplicate rows
+trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2","sim.id","scenario"))
+trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+summary(trajectories_IRoverall$incidence[trajectories_IRoverall$scenario=="baseline"])
+
+#add in noVMMC with ART plot
+
+#noVMMC (with ART) #Added this in upon reviewer request
+library(data.table)
+#head(trajectories_IRoverall) # <- make to look like this
+dir = "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\noVMMCwithART"
+sub_folders = list.files(paste(dir,sep = "/"))
+sub <- "00056499-03fd-e911-a2c3-c4346bcb1551"
+temp_table <- as.data.table(read.csv(file = "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\ReportHIVByAgeAndGender.csv"))
+
+i = 0
+for(sub in sub_folders){
+  i = i+1
+  temp_table <- as.data.table(read.csv(file = paste(dir,sub,"ReportHIVByAgeAndGender.csv",sep="/")))
+  temp_table <- subset(temp_table, Age>10 & Age <50)
+  temp_table$Year2 <- floor((temp_table$Year-0.5))
+  temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+  trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2, subset(temp_table), FUN=sum) #sums number of new infections in each year
+  trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year, subset(temp_table), FUN=sum)
+  trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+  trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+  trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+  trajectories_IRoverall.novmmc.art <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+  trajectories_IRoverall.novmmc.art$incidence <- trajectories_IRoverall.novmmc.art$Newly.Infected / trajectories_IRoverall.novmmc.art$Uninfected.Population
+  trajectories_IRoverall.novmmc.art <- trajectories_IRoverall.novmmc.art[,c(1,4)]
+  trajectories_IRoverall.novmmc.art$sim.id <- paste(sub)
+  trajectories_IRoverall.novmmc.art$scenario <- "noVMMCwithART"
+  if (i==1){
+    trajectories_IRoverall.novmmc.art.temp <- trajectories_IRoverall.novmmc.art
+  } else {
+    trajectories_IRoverall.novmmc.art.temp <- rbind(trajectories_IRoverall.novmmc.art.temp, trajectories_IRoverall.novmmc.art)
+    print(paste0("Why hello there, I'm working on noVMMCwithART folder",i))
+  }
+}
+
+names(trajectories_IRoverall.novmmc.art.temp)
+
+summary(trajectories_IRoverall.novmmc.art.temp$incidence)
+
+ggplot() +
+  geom_line(data=subset(trajectories_IRoverall.novmmc.art.temp, Year2 < year), aes(x=Year2, y=incidence*100, group=sim.id)) +
+  #geom_smooth(data=subset(trajectories_IRoverall.novmmc.art.temp, Year2 < year), aes(x=Year2, y=incidence*100),method="loess", span=span, se = F, size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=24) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  geom_hline(yintercept=0.1, linetype=2) +
+  scale_y_continuous(breaks = seq(0,6,0.5),limits=c(0,5), expand = c(0,0)) +
+  scale_x_continuous(breaks = seq(1975,year,5), limits=c(1975, year),expand = c(0,0)) +
+  theme(legend.position="bottom") +
+  theme(legend.title=element_blank())+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  guides(col = guide_legend(nrow=3)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+
+head(trajectories_IRoverall[,c(1,2,3,6)])
+trajectories_IRoverall.merge <- rbind(trajectories_IRoverall[,c(1,2,3,6)], trajectories_IRoverall.novmmc.art.temp)
+table(trajectories_IRoverall.merge$scenario)
+head(trajectories_IRoverall.merge[trajectories_IRoverall.merge$scenario=="noVMMCwithART",],100)
+summary(trajectories_IRoverall.merge$incidence[trajectories_IRoverall.merge$scenario=="noVMMCwithART"])
+
+year = 2051
+span = 0.2
+trajectories_IRoverall.merge$scenario_f <- ordered(trajectories_IRoverall.merge$scenario, levels=c("noVMMCwithART","ART100pct","noARTnoVMMC","noART","909090","baseline"))
+table(trajectories_IRoverall.merge$scenario_f)
+ggplot() +
+  geom_smooth(data=subset(trajectories_IRoverall.merge, Year2 < year & (scenario_f=="baseline"|scenario_f=="noARTnoVMMC"|scenario_f=="noART"|scenario_f=="noVMMCwithART")), aes(x=Year2, y=incidence*100, color=scenario_f),method="loess", span=span, se = F, size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=24) +
+  scale_color_manual(labels = c("No VMMC with ART","No VMMC without ART", "VMMC without ART", "VMMC with ART (baseline)"), values = c("yellow","red", "orange", "blue")) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  geom_hline(yintercept=0.1, linetype=2) +
+  scale_y_continuous(breaks = seq(0,6,0.5),limits=c(0,5), expand = c(0,0)) +
+  scale_x_continuous(breaks = seq(1975,year,5), limits=c(1975, year),expand = c(0,0)) +
+  theme(legend.position="bottom") +
+  theme(legend.title=element_blank())+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  guides(col = guide_legend(nrow=2),byrow=T) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland.incidence.6scenarios_FINAL.jpg", height=8, width=8)
 
 ###########################################
 #Scenarios
@@ -213,6 +1412,7 @@ for (i in seq(1,250,1)){
 reporthivbyageandgender.master.noart <- reporthivbyageandgender.master
 names(reporthivbyageandgender.master.noart)
 reporthivbyageandgender.master.noart <- reporthivbyageandgender.master.noart[ , -which(names(reporthivbyageandgender.master.noart) %in% c("Newly.Tested.Positive","Newly.Tested.Negative","Tested.Past.Year.or.On_ART", "Tested.Ever","Diagnosed","NodeId","HasIntervention.Traditional_MC.","Non_Program_MMC", "Program_VMMC"))]
+
 
 #909090
 setwd(paste0(wd4))
@@ -465,9 +1665,9 @@ swaziland.inc <- ggplot(data=subset(trajectories_IRoverall, Year2 < year & scena
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   theme(strip.background = element_rect(colour="black", fill="white")) +
   theme(panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      strip.background = element_blank(),
-      panel.border = element_rect(colour = "black"))
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
 swaziland.inc
 
 #get smoothed values
@@ -487,12 +1687,13 @@ swaziland.inc <- ggplot() +
   geom_smooth(data=subset(trajectories_IRoverall, Year2 < year), aes(x=Year2, y=incidence*100, color=scenario_f),method="loess", span=span, se = F, size=2) +
   xlab("Year")+
   ylab("Incidence (per 100 py)")+
-  theme_bw(base_size=24) +
+  theme_bw(base_size=16) +
   scale_color_manual(labels = c("100% ART initiation","No interventions", "VMMC only","Age-targeted 90-90-90", "Baseline"), values = c("green","red", "orange", "purple", "blue")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
   geom_hline(yintercept=0.1, linetype=2) +
-  scale_y_continuous(breaks = seq(0,6,0.5),limits=c(0,5), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(0,6,0.5),limits=c(0,6), expand = c(0,0)) +
   scale_x_continuous(breaks = seq(1975,year,5), limits=c(1975, year),expand = c(0,0)) +
+  coord_cartesian(ylim=c(0, 5)) +
   theme(legend.position="bottom") +
   theme(legend.title=element_blank())+
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
@@ -504,8 +1705,8 @@ swaziland.inc <- ggplot() +
         panel.border = element_rect(colour = "black"))
 swaziland.inc
 
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland.incidence.5scenarios_FINAL.jpg", height=8, width=8)
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Submission\\Lancet HIV\\Resubmission2\\Figures")
+ggsave("swaziland.incidence.5scenarios_FINAL.pdf", height=8, width=8)
 
 ###########################################
 #Calculate incidence by gender
@@ -524,6 +1725,7 @@ swaziland.inc <- ggplot(data=subset(trajectories_IRoverall,  Year2 < year & scen
   theme_bw(base_size=16) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
   scale_y_continuous(breaks = seq(0,6,1),expand = c(0,0)) +
+  coord_cartesian(ylim=c(0, 6)) +
   theme(legend.position="bottom") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   theme(strip.background = element_rect(colour="black", fill="white")) +
@@ -533,7 +1735,7 @@ swaziland.inc <- ggplot(data=subset(trajectories_IRoverall,  Year2 < year & scen
         panel.border = element_rect(colour = "black"))
 swaziland.inc
 
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Submission\\Lancet HIV\\Resubmission2\\Figures")
 ggsave("swaziland.incidence.bygender.calib_FINAL.jpg", height=8, width=12)
 
 labs.3 <- c("2"="Combined", "1" = "Women", "0" = "Men")
@@ -559,8 +1761,8 @@ swaziland.inc <- ggplot(data=subset(trajectories_IR_comb,  Year2 < year & scenar
         panel.border = element_rect(colour = "black"))
 swaziland.inc
 
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland.incidence.bygender_andoverall.calib_FINAL.jpg", height=5, width=12)
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland.incidence.bygender_andoverall.calib_FINAL.png", height=5, width=12)
 
 ###########################################
 #Incidence scenarios by gender
@@ -622,7 +1824,7 @@ swaziland.inc <- ggplot() +
   ylab("Incidence (per 100 py)")+
   facet_grid(Gender~Agecat, labeller=labeller(Gender = labs, Agecat = labs.age)) +
   theme_bw(base_size=24) +
-  scale_color_manual(labels = c("100% ART initiation","Age-targeted 90-90-90", "Baseline"), values = c("green", "purple", "blue")) +
+  scale_color_manual(labels = c("100% ART initiation","Age-targeted 90-90-90", "Status-quo"), values = c("green", "purple", "blue")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
   scale_y_continuous(breaks = seq(0,2.5,0.5),limits=c(0,2.6), expand = c(0,0)) +
   scale_x_continuous(breaks = seq(year1,year2,5), limits=c(year1, year2+1),expand = c(0,0)) +
@@ -638,8 +1840,8 @@ swaziland.inc <- ggplot() +
         panel.border = element_rect(colour = "black"))
 swaziland.inc
 
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland.incidence.byageandgender.2scenarios.jpg", height=12, width=12)
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland.incidence.byageandgender.2scenarios.png", height=12, width=12)
 
 #############################################
 #Cumulative Infections & Number of infections averted by scenario
@@ -793,9 +1995,9 @@ swaziland.inc <- ggplot(data=subset(w,  Year2 < year)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   theme(strip.background = element_rect(colour="black", fill="white")) +
   theme(panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      strip.background = element_blank(),
-      panel.border = element_rect(colour = "black"))
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
 swaziland.inc
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
@@ -884,8 +2086,8 @@ swaziland.prev <- ggplot(data=subset(trajectories_prev, Year < year)) +
         panel.background = element_blank(), axis.line = element_line(colour = "black"))
 swaziland.prev
 
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland.prevalence.calib.gender_baseline.jpg", height=8, width=15)
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland.prevalence.calib.gender_baseline.png", height=8, width=15)
 
 #HIV prev by age and gender
 labs <- c("1" = "Women", "0" = "Men")
@@ -949,8 +2151,7 @@ reporthivbyageandgender.master.final$Agecat<-cut(reporthivbyageandgender.master.
 table(reporthivbyageandgender.master.final$Agecat)
 
 trajectory_ART_calib <- aggregate(cbind(On_ART, Infected) ~ Year+Agecat+Gender+sim.id+scenario,
-                                  subset(reporthivbyageandgender.master.final, Year > 2000 & Year < 2050
-                                         & Age >10 & Age < 50), FUN=sum)
+                                  subset(reporthivbyageandgender.master.final, Year > 2000 & Year < 2050), FUN=sum)
 trajectory_ART_calib$ART_coverage <- trajectory_ART_calib$On_ART / trajectory_ART_calib$Infected
 trajectory_ART_calib.master<-trajectory_ART_calib
 head(trajectory_ART_calib.master)
@@ -971,8 +2172,7 @@ swaziland.ART.calib <- ggplot() +
               aes(x=Year, y=ART_coverage*100, group = factor(Agecat), color=factor(Agecat)), method="loess",span=0.1, se=F, size=1.2) +
   geom_smooth(data=trajectory_ART_calib.master.plot,
               aes(x=Year, y=ART_coverage*100), color="black",linetype=2, method="loess",span=0.1, se=F, size=1.2) +
-  geom_point(data=subset(artdata), aes(x=Year, y=ART_coverage*100,
-                                       color=factor(Agecat)), size=2) +
+  geom_point(data=subset(artdata), aes(x=Year, y=ART_coverage*100, color=factor(Agecat)), size=2) +
   geom_errorbar(data = subset(artdata), aes(x=Year, ymin=lb*100, ymax=ub*100, color=factor(Agecat)), width=1, size=1.2) +
   facet_grid(scenario_f~Gender, labeller=labeller(Gender = labs, scenario_f = labs.scenario)) +
   theme(legend.position="bottom") +
@@ -995,18 +2195,18 @@ swaziland.ART.calib <- ggplot() +
         panel.border = element_rect(colour = "black"))
 swaziland.ART.calib
 
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland_ART_scaleup_by_scenario.jpg", height=13, width=9)
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland_ART_scaleup_by_scenario.png", height=13, width=9)
 
 ################################################
 #ART by risk scenario
 ################################################
-reporthivbyageandgender.master <- reporthivbyageandgender.master.final.risk
-names(reporthivbyageandgender.master)
-table(reporthivbyageandgender.master$scenario)
-reporthivbyageandgender.master$Agecat<-cut(reporthivbyageandgender.master$Age, c(15,25,35,45), right=F)
+#reporthivbyageandgender.master <- reporthivbyageandgender.master.final.risk
+# names(reporthivbyageandgender.master)
+# table(reporthivbyageandgender.master$scenario)
+# reporthivbyageandgender.master$Agecat<-cut(reporthivbyageandgender.master$Age, c(15,25,35,45), right=F)
 trajectory_ART_calib <- aggregate(cbind(On_ART, Infected) ~ Year+Agecat+Gender+sim.id+scenario,
-                                  subset(reporthivbyageandgender.master, Age>10 & Age<60 & Year > 2000 & Year < 2050), FUN=sum)
+                                  subset(reporthivbyageandgender.master, Age>14 & Age<50 & Year > 2000 & Year < 2050), FUN=sum)
 trajectory_ART_calib$ART_coverage <- trajectory_ART_calib$On_ART / trajectory_ART_calib$Infected
 trajectory_ART_calib.master<-trajectory_ART_calib
 
@@ -1025,7 +2225,7 @@ swaziland.ART.calib <- ggplot() +
   #geom_hline(aes(yintercept=81)) +
   ylab("ART Coverage %")+
   theme_bw(base_size=20) +
-  scale_color_manual(labels = c("15-24", "25-34", "35-44"), values = c("blue", "purple", "red")) +
+  scale_color_manual(labels = c("15-24", "25-34", "35-49"), values = c("blue", "purple", "red")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
   scale_y_continuous(limits=c(0,100), breaks = seq(0,100,10), expand=c(0,0)) +
   scale_x_continuous(limits = c(2000,year), breaks = seq(2000,year+1,5), expand=c(0,0)) +
@@ -1043,13 +2243,15 @@ ggsave("swaziland_ART_scaleup_by_risk_scenario.jpg", height=12, width=9)
 #Numbers on ART by scenario
 #################################################
 head(trajectory_ART_calib.master,200)
+table(trajectory_ART_calib.master$Agecat)
 trajectory_ART_calib.master$Year2 <- floor((trajectory_ART_calib.master$Year-0.5))
 trajectory_numbersonART <- aggregate(On_ART ~ Year2+Agecat+Gender+sim.id+scenario,
-                                         subset(trajectory_ART_calib.master), FUN=sum)
+                                     subset(trajectory_ART_calib.master), FUN=sum)
 table(trajectory_numbersonART$scenario)
 trajectory_numbersonART$scenario_f = factor(trajectory_numbersonART$scenario, levels=c('ART100pct','909090',"baseline"))
 
 table(trajectory_numbersonART$scenario_f)
+table(trajectory_numbersonART$Agecat)
 head(trajectory_numbersonART)
 year=2048
 swaziland.ART.calib <- ggplot() +
@@ -1057,7 +2259,7 @@ swaziland.ART.calib <- ggplot() +
               aes(x=Year2, y=On_ART*scale.factor, group = factor(scenario_f), color=factor(scenario_f)), method="loess",span=0.2, se=F, size=1.2) +
   geom_smooth(data=subset(trajectory_numbersonART, Agecat=="[25,35)"),
               aes(x=Year2, y=On_ART*scale.factor, group = factor(scenario_f), color=factor(scenario_f)), method="loess",span=0.2, se=F, size=1.2, linetype=2) +
-  geom_smooth(data=subset(trajectory_numbersonART, Agecat=="[35,45)"),
+  geom_smooth(data=subset(trajectory_numbersonART, Agecat=="[35,50)"),
               aes(x=Year2, y=On_ART*scale.factor, group = factor(scenario_f), color=factor(scenario_f)), method="loess",span=0.2, se=F, size=1.2, linetype=3) +
   facet_grid(~Gender, labeller=labeller(Gender = labs)) +
   theme(legend.position="bottom") +
@@ -1090,7 +2292,7 @@ swaziland.ART.calib <- ggplot() +
   xlab("Year")+
   ylab("Number on ART")+
   theme_bw(base_size=20) +
-  scale_color_manual(labels = c("Age-targeted 90-90-90 (scenario 4)", "100% ART initation (scenario 5)",  "Status quo (scenario 1)"), values = c("purple", "green", "blue")) +
+  scale_color_manual(labels = c("Age-targeted 90-90-90 (scenario 4)", "100% ART initation (scenario 5)",  "Status-quo (scenario 1)"), values = c("purple", "green", "blue")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
   #scale_y_continuous(limits=c(0,100), breaks = seq(0,100,10), expand=c(0,0)) +
   scale_x_continuous(limits = c(2000,year), breaks = seq(2000,year,5), expand=c(0,0)) +
@@ -1104,8 +2306,8 @@ swaziland.ART.calib <- ggplot() +
         panel.border = element_rect(colour = "black"))
 swaziland.ART.calib
 
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland_numbersonART.byage.gender2_scaleup_by_scenario_new.jpg", height=15, width=9)
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland_numbersonART.byage.gender2_scaleup_by_scenario_new.png", height=13, width=9)
 
 #by gender
 head(trajectory_ART_calib.master,200)
@@ -1120,16 +2322,13 @@ swaziland.ART.calib <- ggplot() +
               aes(x=Year2, y=On_ART*scale.factor), method="loess",span=0.2, se=F, size=1.2, color="purple") +
   geom_smooth(data=subset(trajectory_numbersonART, scenario_f=="ART100pct"),
               aes(x=Year2, y=On_ART*scale.factor), method="loess",span=0.2, se=F, size=1.2, color="green") +
-  facet_grid(~Gender, labeller=labeller(Gender = labs)) +
   geom_smooth(data=subset(trajectory_numbersonART, scenario_f=="baseline"),
               aes(x=Year2, y=On_ART*scale.factor), method="loess",span=0.2, se=F, size=1.2, color="blue") +
+  facet_grid(~Gender, labeller=labeller(Gender = labs)) +
   theme(legend.position="bottom") +
-  #geom_hline(aes(yintercept=81)) +
   ylab("Number on ART")+
   theme_bw(base_size=20) +
-  #scale_color_manual(labels = c("15-24", "25-34", "35-44"), values = c("blue", "purple", "red")) +
   guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
-  #scale_y_continuous(limits=c(0,100), breaks = seq(0,100,10), expand=c(0,0)) +
   scale_x_continuous(limits = c(2000,year), breaks = seq(2000,year,5), expand=c(0,0)) +
   theme(legend.position="bottom") +
   theme(legend.direction='vertical') +
@@ -1239,7 +2438,7 @@ test <- trajectory_numbersonART[order(trajectory_numbersonART$scenario, trajecto
 #calculate cumulative incidence by year 
 test$csum <- ave(test$On_ART, test$scenario, 
                  test$sim.id, test$Gender, 
-                FUN=cumsum)
+                 FUN=cumsum)
 
 head(test)
 
@@ -1378,8 +2577,50 @@ swaziland.mortality.scenario <- ggplot() +
         panel.border = element_rect(colour = "black"))
 swaziland.mortality.scenario
 
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("swaziland.mortality.by.scenario.jpg", height=8, width=8)
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland.mortality.by.scenario.png", height=8, width=8)
+
+#combine incidence and mortality by scenarios
+year = 2051
+span = 0.25
+names(trajectories_MRoverall)
+trajectories_MRoverall$metric <- "Mortality"
+trajectories_MRoverall$value <- trajectories_MRoverall$mortality
+names(trajectories_IRoverall)
+trajectories_IRoverall$metric <- "Incidence"
+trajectories_IRoverall$value <- trajectories_IRoverall$incidence
+trajectories_MR_IR <- rbind(trajectories_IRoverall[,c(1,2,3,8,9,10)], trajectories_MRoverall[,c(1,2,3,7,8,9)])
+trajectories_MR_IR$epidemiccontrol <- NA
+trajectories_MR_IR$epidemiccontrol[trajectories_MR_IR$metric=="Incidence"] <- 0.1
+trajectories_MR_IR$epidemiccontrol[trajectories_MR_IR$metric=="Mortality"] <- NA
+summary(trajectories_MR_IR$epidemiccontrol)
+
+trajectories_MR_IR$scenario_f <- ordered(trajectories_MR_IR$scenario, levels=c("ART100pct","noARTnoVMMC","noART","909090","baseline"))
+
+ggplot() +
+  geom_smooth(data=subset(trajectories_MR_IR, Year2 < year), aes(x=Year2, y=value*100, color=scenario_f),method="loess", span=span, se = F, size=2) +
+  geom_line(data=subset(trajectories_MR_IR,Year2<year), aes(x=Year2, y=epidemiccontrol),color="black", size=1, linetype=2) +
+  facet_grid(~metric) +
+  xlab("Year")+
+  ylab("Rate (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_color_manual(labels = c("100% ART initiation","No interventions", "VMMC only","Age-targeted 90-90-90", "Status-quo"), values = c("green","red", "orange", "purple", "blue")) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+  #geom_hline(yintercept=trajectories_MR_IR$epidemiccontrol, linetype=2) +
+  scale_y_continuous(breaks = seq(0,5,0.5),limits=c(0,4.5), expand = c(0,0)) +
+  scale_x_continuous(breaks = seq(1980,year,5), limits=c(1979, year+0.5),expand = c(0,0)) +
+  theme(legend.position="bottom") +
+  theme(legend.title=element_blank())+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  guides(col = guide_legend(nrow=1)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("swaziland.incidence.mortality.by.scenario.png", height=10, width=17)
 
 #Crude mortality numbers
 
@@ -1979,6 +3220,38 @@ names(results.final.incidence.age.gender)
 results.final.incidence.age.gender <- results.final.incidence.age.gender[order(results.final.incidence.age.gender$scenario, results.final.incidence.age.gender$endyear),]
 
 write.csv(results.final.incidence.age.gender, "results.final.incidence.age.gender.csv")
+
+#Plot the table
+head(results.final.incidence.age.gender)
+table(results.final.incidence.age.gender$endyear)
+results.final.incidence.age.gender$horizon <- paste0(results.final.incidence.age.gender$startyear,"-",
+                                                     results.final.incidence.age.gender$endyear)
+table(results.final.incidence.age.gender$horizon)
+
+
+labs.scenario <- c("909090"="Age-targeted 909090 (Scenario 4)", "ART100pct"="100% ART (Scenario 5)")
+
+ggplot(data=subset(results.final.incidence.age.gender, horizon!="2010-2016")) +
+  geom_point(aes(x=Gender, y=`50%`, color=Agecat),position = position_dodge(width = 0.3))+
+  geom_errorbar(aes(x=Gender, ymin=`2.5%`, ymax=`97.5%`,color=Agecat,width=0.2),position = position_dodge(width = 0.3)) +
+  facet_grid(horizon~scenario,labeller=labeller(scenario =labs.scenario)) +
+  xlab("")+
+  ylab("Reduction (%) in cumulative incidence relative to status-quo ART (scenario 1)")+
+  geom_hline(yintercept=0, linetype=2) +
+  theme_bw(base_size=16) +
+  guides(color = guide_legend(keywidth = 2, keyheight = 1, title="Age group")) +
+  scale_y_continuous(breaks = seq(-5,50,10),limits=c(-12,55),expand = c(0,0)) +
+  theme(legend.position="bottom") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
+ggsave("cumulativeindcidencebyageandgender.png", height=10, width=8)
+
 ##########################################################################
 #reduction in cumulative incidence
 ##########################################################################
@@ -2110,7 +3383,7 @@ results.final.cumincidence$Gender <- c("All","All","All","Female","Female","Fema
 
 ##########################################################################
 #Number of deaths averted - calculates deaths over different time horizons
-#and divieds by number of person-years (of entire population) over that time
+#and divides by number of person-years (of entire population) over that time
 ##########################################################################
 reporthivbyageandgender.master$Uninfected.Population = reporthivbyageandgender.master$Population-reporthivbyageandgender.master$Infected
 
@@ -2405,7 +3678,7 @@ write.csv(results.final.w, "results.final.point.est.raw.wide.csv")
 write.csv(results.final.w2, "results.final.point.est.raw.wide2.csv")
 
 ###########################################################################################################
-#Aute HIV infection
+#Acute HIV infection
 ###########################################################################################################
 
 #Baseline scenario
@@ -2438,7 +3711,7 @@ for (i in seq(1,250,1)){
   else{
     TransmissionMatrix.master <- rbind(TransmissionMatrix.master, TransmissionMatrix)
     transmissionreport.master <- rbind(transmissionreport.master, transmissionreport)
-  print(paste0("Why hello there, I'm working on baseline Transmission report folder",i))
+    print(paste0("Why hello there, I'm working on baseline Transmission report folder",i))
   }
 }
 
@@ -2824,6 +4097,14 @@ files <- list.files(full.names = F)
 head(files)
 f <- paste0(wd13, files)
 length(f)
+i = 2
+
+transmissionreport.master <- read.csv(f[i])
+transmissionreport.master$scenario <- "baseline"
+transmissionreport.master$sim.id <- paste0(files[i])
+names(transmissionreport.master)
+table(transmissionreport.master$SRC_STAGE)
+table(transmissionreport.master$SRC_VIRAL_LOAD)
 
 for (i in seq(1,250,1)){
   transmissionreport <- read.csv(f[i])
@@ -2858,7 +4139,7 @@ transmissionreport <- subset(transmissionreport, dest_age_int > 14 & src_age_int
 #transmissionreport$age.at.transmission.cat <- cut(transmissionreport$src_age_int, c(15,25,35,200), right=F)
 transmissionreport$year <- transmissionreport$YEAR
 names(transmissionreport)
-transmissionreport <- transmissionreport[,c(3,4,6,7,9,11,12,13,14,15)]
+#transmissionreport <- transmissionreport[,c(3,4,6,7,9,11,12,13,14,15)]
 
 #################################################################################################
 #Time from infection until transmission by age and sex year and scenario + Proportion acute / early
@@ -3625,259 +4906,261 @@ prev.plot <- ggplot(subset(ppdv, Year == 1990)) +
         panel.background = element_blank(), axis.line = element_line(colour = "black"))
 prev.plot
 
-predict(loess(incidence~Year2,baseline.smooth, span=0.2)
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("pppv.plot.1990.jpg", height=8, width=12)
-
-prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995)) +
-  geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
-  geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
-  scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
-  facet_grid(~Gender,labeller=labeller(Gender = labs)) +
-  xlab("Age") +
-  ylab("% with detectable viral load") +
-  scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
-  scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
-  theme_bw(base_size=20) +
-  theme(legend.title=element_blank())+
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-prev.plot
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("pppv.plot.1995.jpg", height=8, width=12)
-
-prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000)) +
-  geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
-  geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
-  scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
-  facet_grid(~Gender,labeller=labeller(Gender = labs)) +
-  xlab("Age") +
-  ylab("% with detectable viral load") +
-  scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
-  scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
-  theme_bw(base_size=20) +
-  theme(legend.title=element_blank())+
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-prev.plot
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("pppv.plot.2000.jpg", height=8, width=12)
-
-prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000 | Year == 2005)) +
-  geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
-  geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
-  scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
-  facet_grid(~Gender,labeller=labeller(Gender = labs)) +
-  xlab("Age") +
-  ylab("% with detectable viral load") +
-  scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
-  scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
-  theme_bw(base_size=20) +
-  theme(legend.title=element_blank())+
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-prev.plot
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("pppv.plot.2005.jpg", height=8, width=12)
-
-prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000 | Year == 2005 | Year == 2010)) +
-  geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
-  geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
-  scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
-  facet_grid(~Gender,labeller=labeller(Gender = labs)) +
-  xlab("Age") +
-  ylab("% with detectable viral load") +
-  scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
-  scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
-  theme_bw(base_size=20) +
-  theme(legend.title=element_blank())+
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-prev.plot
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("pppv.plot.2010.jpg", height=8, width=12)
-
-prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000 | Year == 2005 | Year == 2016)) +
-  geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
-  geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
-  scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
-  facet_grid(~Gender,labeller=labeller(Gender = labs)) +
-  xlab("Age") +
-  ylab("% with detectable viral load") +
-  scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
-  scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
-  theme_bw(base_size=20) +
-  theme(legend.title=element_blank())+
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-prev.plot
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("pppv.plot.2016.jpg", height=8, width=12)
-
-prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000 | Year == 2005 | Year == 2016 | Year == 2030)) +
-  geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
-  geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
-  scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
-  facet_grid(~Gender,labeller=labeller(Gender = labs)) +
-  xlab("Age") +
-  ylab("% with detectable viral load") +
-  scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
-  scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
-  theme_bw(base_size=20) +
-  theme(legend.title=element_blank())+
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-prev.plot
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("pppv.plot.2030.jpg", height=8, width=12)
-
-#calculate population prevalence of unsuppressed viral load
-OnARTnumbers <- aggregate(On_ART ~ Year+Gender+Age, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum) #sums prev infections in each year
-Population <- aggregate(Population ~ Year+Gender+Age, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum)
-Infected <- aggregate(Infected ~ Year+Gender+Age, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum)
-
-ppdv <- merge(OnARTnumbers, Population, by=c("Year","Gender","Age"))
-ppdv <- merge(ppdv, Infected, by=c("Year","Gender","Age"))
-ppdv$suppressed <- ppdv$On_ART*0.92
-ppdv$unsuppr <- ppdv$Infected - ppdv$suppressed
-ppdv$ppdv <- ppdv$unsuppr / ppdv$Population
-ppdv$prevalence <- ppdv$Infected / ppdv$Population
-summary(ppdv$ppdv)
-summary(ppdv$prevalence)
-head(ppdv)
-summary(ppdv$ppdv*100)
-
-#calculate population prevalence of unsuppressed viral load by broad age.group
-head(reporthivbyageandgender)
-reporthivbyageandgender$age.cat <- cut(reporthivbyageandgender$Age, c(15,25,35,100), right=F)
-OnARTnumbers <- aggregate(On_ART ~ Year+Gender+age.cat, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum) #sums prev infections in each year
-Population <- aggregate(Population ~ Year+Gender+age.cat, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum)
-Infected <- aggregate(Infected ~ Year+Gender+age.cat, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum)
-
-ppdv <- merge(OnARTnumbers, Population, by=c("Year","Gender","age.cat"))
-ppdv <- merge(ppdv, Infected, by=c("Year","Gender","age.cat"))
-ppdv$suppressed <- ppdv$On_ART*0.92
-ppdv$unsuppr <- ppdv$Infected - ppdv$suppressed
-ppdv$ppdv <- ppdv$unsuppr / ppdv$Population
-ppdv$prevalence <- ppdv$Infected / ppdv$Population
-summary(ppdv$ppdv)
-summary(ppdv$prevalence)
-head(ppdv)
-summary(ppdv$ppdv*100)
-
-#over time by age
-year1 = 1985
-year2 = 2020
-summary(ppdv$Age)
-ppdv.plot <- ggplot() +
-  geom_line(data = subset(ppdv, Year >= year1 & Year <=year2), size=1.2, linetype=1, aes(x = Year, y=ppdv*100, color=factor(age.cat), group=factor(age.cat)))+ 
-  #scale_colour_gradientn(colours=rainbow(3)) +
-  facet_grid(~Gender,labeller=labeller(Gender = labs)) +
-  xlab("Year of HIV acquisition") +
-  ylab("Population prevalence of unsuppressed viral load") +
-  #scale_x_continuous(limits = c(15, 60), breaks=seq(15,60,5),expand=c(0,0)) +
-  #scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
-  theme_bw(base_size=16) +
-  # guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-ppdv.plot
-
-year1 = 1985
-year2 = 2020
-limits = c(0,max(ppdv$ppdv))
-breaks = seq(0, max(ppdv$ppdv), max(ppdv$ppdv)/6)
-breaks=round(breaks, 3)
-table(ppdv$Age)
-
-ppdv.raster.plot <-  ggplot() +
-  geom_raster(data=subset(ppdv, Year >= year1 & Year <=year2), aes(y=Age, x=Year, fill=ppdv*100))+ 
-  scale_fill_gradientn(name="Prevalence",
-                       colours=c("darkblue","blue","yellow","darkred"),
-                       limits=limits*100,
-                       breaks=breaks*100) +
-  stat_contour(data=subset(ppdv, Year >= year1 & Year <=year2), aes(y=Age, x=Year, z=ppdv*100),
-               color="black", size=0.5, linetype=1, binwidth=5) +
-  facet_grid(~Gender,labeller=labeller(Gender = labs)) +
-  theme(legend.position="bottom") +
-  xlab("Year")+
-  ylab("Age")+
-  scale_x_continuous(expand=c(0,0), breaks=seq(year1,year2-1,5), limits=c(year1,year2)) +
-  scale_y_continuous(expand=c(0,0)) +
-  theme_bw(base_size=20) +
-  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white"))
-ppdv.raster.plot
-
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
-ggsave("pppv.plot.raster.jpg", height=8, width=12)
-
-
-
+predict(loess(incidence~Year2,baseline.smooth, span=0.2))
+        
+        setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+        ggsave("pppv.plot.1990.jpg", height=8, width=12)
+        
+        prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995)) +
+          geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
+          geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
+          scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
+          facet_grid(~Gender,labeller=labeller(Gender = labs)) +
+          xlab("Age") +
+          ylab("% with detectable viral load") +
+          scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
+          scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
+          theme_bw(base_size=20) +
+          theme(legend.title=element_blank())+
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white")) +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), axis.line = element_line(colour = "black"))
+        prev.plot
+        
+        setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+        ggsave("pppv.plot.1995.jpg", height=8, width=12)
+        
+        prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000)) +
+          geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
+          geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
+          scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
+          facet_grid(~Gender,labeller=labeller(Gender = labs)) +
+          xlab("Age") +
+          ylab("% with detectable viral load") +
+          scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
+          scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
+          theme_bw(base_size=20) +
+          theme(legend.title=element_blank())+
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white")) +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), axis.line = element_line(colour = "black"))
+        prev.plot
+        
+        setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+        ggsave("pppv.plot.2000.jpg", height=8, width=12)
+        
+        prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000 | Year == 2005)) +
+          geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
+          geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
+          scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
+          facet_grid(~Gender,labeller=labeller(Gender = labs)) +
+          xlab("Age") +
+          ylab("% with detectable viral load") +
+          scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
+          scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
+          theme_bw(base_size=20) +
+          theme(legend.title=element_blank())+
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white")) +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), axis.line = element_line(colour = "black"))
+        prev.plot
+        
+        setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+        ggsave("pppv.plot.2005.jpg", height=8, width=12)
+        
+        prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000 | Year == 2005 | Year == 2010)) +
+          geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
+          geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
+          scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
+          facet_grid(~Gender,labeller=labeller(Gender = labs)) +
+          xlab("Age") +
+          ylab("% with detectable viral load") +
+          scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
+          scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
+          theme_bw(base_size=20) +
+          theme(legend.title=element_blank())+
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white")) +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), axis.line = element_line(colour = "black"))
+        prev.plot
+        
+        setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+        ggsave("pppv.plot.2010.jpg", height=8, width=12)
+        
+        prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000 | Year == 2005 | Year == 2016)) +
+          geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
+          geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
+          scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
+          facet_grid(~Gender,labeller=labeller(Gender = labs)) +
+          xlab("Age") +
+          ylab("% with detectable viral load") +
+          scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
+          scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
+          theme_bw(base_size=20) +
+          theme(legend.title=element_blank())+
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white")) +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), axis.line = element_line(colour = "black"))
+        prev.plot
+        
+        setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+        ggsave("pppv.plot.2016.jpg", height=8, width=12)
+        
+        prev.plot <- ggplot(subset(ppdv, Year==1990 | Year==1995 | Year==2000 | Year == 2005 | Year == 2016 | Year == 2030)) +
+          geom_line(size=1.2, linetype=1, aes(x = Age, y=ppdv*100, color=Year, group=interaction(Year,sim.id)), alpha=0.03)+ 
+          geom_smooth(aes(x=Age, y=ppdv*100, color=Year, group=Year),method="loess", span=0.5, se = F, size=2, linetype=1) +
+          scale_colour_gradientn(colours=rainbow(3),limits=c(year1, year2), breaks = c(year1,round((year1+year2)/2,0),year2)) +
+          facet_grid(~Gender,labeller=labeller(Gender = labs)) +
+          xlab("Age") +
+          ylab("% with detectable viral load") +
+          scale_x_continuous(limits = c(15, 60), breaks=seq(15,59,5),expand=c(0,0)) +
+          scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
+          theme_bw(base_size=20) +
+          theme(legend.title=element_blank())+
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white")) +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), axis.line = element_line(colour = "black"))
+        prev.plot
+        
+        setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+        ggsave("pppv.plot.2030.jpg", height=8, width=12)
+        
+        #calculate population prevalence of unsuppressed viral load
+        OnARTnumbers <- aggregate(On_ART ~ Year+Gender+Age, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum) #sums prev infections in each year
+        Population <- aggregate(Population ~ Year+Gender+Age, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum)
+        Infected <- aggregate(Infected ~ Year+Gender+Age, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum)
+        
+        ppdv <- merge(OnARTnumbers, Population, by=c("Year","Gender","Age"))
+        ppdv <- merge(ppdv, Infected, by=c("Year","Gender","Age"))
+        ppdv$suppressed <- ppdv$On_ART*0.92
+        ppdv$unsuppr <- ppdv$Infected - ppdv$suppressed
+        ppdv$ppdv <- ppdv$unsuppr / ppdv$Population
+        ppdv$prevalence <- ppdv$Infected / ppdv$Population
+        summary(ppdv$ppdv)
+        summary(ppdv$prevalence)
+        head(ppdv)
+        summary(ppdv$ppdv*100)
+        
+        #calculate population prevalence of unsuppressed viral load by broad age.group
+        head(reporthivbyageandgender)
+        reporthivbyageandgender$age.cat <- cut(reporthivbyageandgender$Age, c(15,25,35,100), right=F)
+        OnARTnumbers <- aggregate(On_ART ~ Year+Gender+age.cat, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum) #sums prev infections in each year
+        Population <- aggregate(Population ~ Year+Gender+age.cat, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum)
+        Infected <- aggregate(Infected ~ Year+Gender+age.cat, subset(reporthivbyageandgender, Age>10 & Age < 100), FUN=sum)
+        
+        ppdv <- merge(OnARTnumbers, Population, by=c("Year","Gender","age.cat"))
+        ppdv <- merge(ppdv, Infected, by=c("Year","Gender","age.cat"))
+        ppdv$suppressed <- ppdv$On_ART*0.92
+        ppdv$unsuppr <- ppdv$Infected - ppdv$suppressed
+        ppdv$ppdv <- ppdv$unsuppr / ppdv$Population
+        ppdv$prevalence <- ppdv$Infected / ppdv$Population
+        summary(ppdv$ppdv)
+        summary(ppdv$prevalence)
+        head(ppdv)
+        summary(ppdv$ppdv*100)
+        
+        #over time by age
+        year1 = 1985
+        year2 = 2020
+        summary(ppdv$Age)
+        ppdv.plot <- ggplot() +
+          geom_line(data = subset(ppdv, Year >= year1 & Year <=year2), size=1.2, linetype=1, aes(x = Year, y=ppdv*100, color=factor(age.cat), group=factor(age.cat)))+ 
+          #scale_colour_gradientn(colours=rainbow(3)) +
+          facet_grid(~Gender,labeller=labeller(Gender = labs)) +
+          xlab("Year of HIV acquisition") +
+          ylab("Population prevalence of unsuppressed viral load") +
+          #scale_x_continuous(limits = c(15, 60), breaks=seq(15,60,5),expand=c(0,0)) +
+          #scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
+          theme_bw(base_size=16) +
+          # guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white")) +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), axis.line = element_line(colour = "black"))
+        ppdv.plot
+        
+        year1 = 1985
+        year2 = 2020
+        limits = c(0,max(ppdv$ppdv))
+        breaks = seq(0, max(ppdv$ppdv), max(ppdv$ppdv)/6)
+        breaks=round(breaks, 3)
+        table(ppdv$Age)
+        
+        ppdv.raster.plot <-  ggplot() +
+          geom_raster(data=subset(ppdv, Year >= year1 & Year <=year2), aes(y=Age, x=Year, fill=ppdv*100))+ 
+          scale_fill_gradientn(name="Prevalence",
+                               colours=c("darkblue","blue","yellow","darkred"),
+                               limits=limits*100,
+                               breaks=breaks*100) +
+          stat_contour(data=subset(ppdv, Year >= year1 & Year <=year2), aes(y=Age, x=Year, z=ppdv*100),
+                       color="black", size=0.5, linetype=1, binwidth=5) +
+          facet_grid(~Gender,labeller=labeller(Gender = labs)) +
+          theme(legend.position="bottom") +
+          xlab("Year")+
+          ylab("Age")+
+          scale_x_continuous(expand=c(0,0), breaks=seq(year1,year2-1,5), limits=c(year1,year2)) +
+          scale_y_continuous(expand=c(0,0)) +
+          theme_bw(base_size=20) +
+          guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white"))
+        ppdv.raster.plot
+        
+        setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Final_Plots")
+        ggsave("pppv.plot.raster.jpg", height=8, width=12)
+        
+        
+        
+        
+        
 ##########################################
 #Extra plots
 ##########################################
-#How many transmissions does each newly infected person produce within the first year?
-names(transmissionreport)
-transmissionreport$transmit.in.1yr <- 0
-transmissionreport$transmit.in.1yr[transmissionreport$yrs.to.transmit<1] <- 1
-head(transmissionreport,20)
-transmit.1yr <- aggregate(transmit.in.1yr ~ age.cat + src.gender + year.acq.int, transmissionreport, FUN=sum)
-nrow(transmit.1yr)
-denominator <- aggregate(acquisition ~ age.cat + src.gender + year.acq.int, transmissionreport, FUN=sum)
-nrow(denominator)
-transmit.1yr <- merge(transmit.1yr, denominator, by=c("age.cat", "src.gender","year.acq.int"))
-head(transmit.1yr)
-transmit.1yr$prop <- transmit.1yr$transmit.in.1yr / transmit.1yr$acquisition
-
-transmissions.by.year.1yr <- ggplot() +
-  geom_line(data = transmit.1yr, size=1.2, linetype=1, aes(x = year.acq.int, y=prop, color=age.cat, group=age.cat))+ 
-  #geom_ribbon(data= subset(agg.median.age.at.hiv.m), aes(x = year, ymin=AgeAtVisit[,2], ymax=AgeAtVisit[,3], fill = sex), alpha=0.3)+ 
-  #geom_point(data= subset(p.transmit.1yr), aes(x=year.acq.int, y=transmit.in.1yr*100, color=age.cat)) +
-  facet_grid(~src.gender) +
-  xlab("Year of HIV acquisition") +
-  ylab("Number of transmissions per infected individual") +
-  scale_x_continuous(limits = c(1990, 2049), breaks=seq(1990,2049,5),expand=c(0,0)) +
-  #scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
-  theme_bw(base_size=16) +
-  # guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  theme(legend.position="bottom") +
-  theme(strip.background = element_rect(colour="black", fill="white")) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"))
-transmissions.by.year.1yr
-
-
-
-  
+        #How many transmissions does each newly infected person produce within the first year?
+        names(transmissionreport)
+        transmissionreport$transmit.in.1yr <- 0
+        transmissionreport$transmit.in.1yr[transmissionreport$yrs.to.transmit<1] <- 1
+        head(transmissionreport,20)
+        transmit.1yr <- aggregate(transmit.in.1yr ~ age.cat + src.gender + year.acq.int, transmissionreport, FUN=sum)
+        nrow(transmit.1yr)
+        denominator <- aggregate(acquisition ~ age.cat + src.gender + year.acq.int, transmissionreport, FUN=sum)
+        nrow(denominator)
+        transmit.1yr <- merge(transmit.1yr, denominator, by=c("age.cat", "src.gender","year.acq.int"))
+        head(transmit.1yr)
+        transmit.1yr$prop <- transmit.1yr$transmit.in.1yr / transmit.1yr$acquisition
+        
+        transmissions.by.year.1yr <- ggplot() +
+          geom_line(data = transmit.1yr, size=1.2, linetype=1, aes(x = year.acq.int, y=prop, color=age.cat, group=age.cat))+ 
+          #geom_ribbon(data= subset(agg.median.age.at.hiv.m), aes(x = year, ymin=AgeAtVisit[,2], ymax=AgeAtVisit[,3], fill = sex), alpha=0.3)+ 
+          #geom_point(data= subset(p.transmit.1yr), aes(x=year.acq.int, y=transmit.in.1yr*100, color=age.cat)) +
+          facet_grid(~src.gender) +
+          xlab("Year of HIV acquisition") +
+          ylab("Number of transmissions per infected individual") +
+          scale_x_continuous(limits = c(1990, 2049), breaks=seq(1990,2049,5),expand=c(0,0)) +
+          #scale_y_continuous(limits = c(0, 60), breaks=seq(0,60,5),expand=c(0,0)) +
+          theme_bw(base_size=16) +
+          # guides(fill = guide_legend(keywidth = 2, keyheight = 1)) +
+          theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+          theme(legend.position="bottom") +
+          theme(strip.background = element_rect(colour="black", fill="white")) +
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), axis.line = element_line(colour = "black"))
+        transmissions.by.year.1yr
+        
+        
+        
+        
