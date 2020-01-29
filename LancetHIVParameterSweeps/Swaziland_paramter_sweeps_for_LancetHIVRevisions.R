@@ -12,6 +12,7 @@ library(data.table)
 library(tidyr)
 library(matrixStats)
 library(stringr)
+<<<<<<< HEAD
 
 options(scipen=999)
 
@@ -1133,22 +1134,225 @@ ggsave("meantimefromacquisitiontotransmission.jpg", height=10, width=10)
 
 
 
+=======
+>>>>>>> 8a1555094a698451b6685d70ba1fc9d8fab49099
+
+
+
+<<<<<<< HEAD
 
 
 
 
+=======
+# Set working directories
+
+input_dir <- "C:/Users/aakullian/Documents/GitHub/EMOD_eswatini/ParamterSweepOutput_Baseline/acuteness"
+
+#Acute Paramter Sweep (includes a 2-dim sweep over acute duration and acute stage multiplier)
+primary_dirs = list.files(input_dir)
+dir = "Acute_Stage_Infectivity_Multiplier-10--Acute_Duration_In_Months-1"
+sub = "045538e9-acf8-e911-a2c3-c4346bcb1551"
+
+inc_values <- data.frame("year"=seq(1980,2056,1))
+median_inc <- data.frame("year"=seq(1980,2056,1))
+i = 0
+
+for(dir in primary_dirs) {
+  sub_folders = list.files(paste(input_dir,dir,sep = "/"))
+  for(sub in sub_folders){
+    i=i+1
+    temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,sub,"ReportHIVByAgeAndGender.csv",sep="/")))
+    temp_table$Year2 <- floor((temp_table$Year-0.5))
+    temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+    trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+    trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+    trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+    trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+    trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+    trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+    trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+    inc_values$newCol1 <- trajectories_IRoverall$incidence
+    colnames(inc_values)[ncol(inc_values)] <- paste(sub)
+    print(paste("working on sub-folder",sub,"sim",i,sep=" "))
+  }
+  median_inc$val1=rowQuantiles(as.matrix(inc_values[,2:ncol(inc_values)]), probs = 0.5)
+  colnames(median_inc)[ncol(median_inc)] <- paste(str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][1],str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][2], sep=",") 
+  print(paste("working on sub-folder",dir,sep=" "))
+}
+
+head(median_inc)
+rtest <- gather(median_inc, parameter, incidence, `10,1`:`30,5`, factor_key=TRUE)
+acute_stage <- data.frame(within(rtest, parameter<-data.frame(do.call('rbind', strsplit(as.character(parameter), ',', fixed=TRUE)))))
+acute_stage <- data.frame("year"=acute_stage$year,"incidence"=acute_stage$incidence,"acute_multi"=acute_stage$parameter[1], "acute_dur"=acute_stage$parameter[2])
+acute_stage$acute_multi <- acute_stage$X1
+acute_stage$acute_dur <- acute_stage$X2
+acute_stage <- acute_stage[,c(1:2,5:6)]
+head(acute_stage)
+
+ggplot() +
+  geom_line(data=subset(acute_stage, acute_dur==3), aes(x=year, y=incidence*100, color=acute_multi),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2050), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of acute stage infectivity multiplier") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Multiplier on acute stage infectivity"))+
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=3)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_acutemult_acutedur3mo.jpg", height=8, width=8)
+
+ggplot() +
+  geom_line(data=subset(acute_stage, acute_multi==25), aes(x=year, y=incidence*100, color=acute_dur),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2050), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of acute stage duration") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Acute stage duration in months"))+
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=3)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_acutedur_acutemulti26.jpg", height=8, width=8)
+
+ggplot(data=subset(acute_stage, year==2016 | year==2020 | year == 2030 | year==2050)) +
+  geom_raster(aes(y=as.numeric(as.character(acute_multi)), x=as.numeric(as.character(acute_dur)), fill=incidence*100))+ 
+  geom_point(aes(x=3, y=25), shape=3) +
+  scale_fill_gradient(name="incidence per 100 py", low="blue", high="yellow")+
+  theme(legend.position="bottom") +
+  facet_wrap(~year)+
+  xlab("acute duration") +
+  ylab("acute infectivity")+
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_raster_acute_dur_multi.jpg", height=8, width=8)
+
+#Paramter sweep of ART reduce acquire & delay from infection to ART initiation 
+
+# Set working directories
+input_dir <- "C:/Users/aakullian/Documents/GitHub/EMOD_eswatini/ParamterSweepOutput_Baseline/delay_and_supression"
+
+primary_dirs = list.files(input_dir)
+inc_values2 <- data.frame("year"=seq(1980,2056,1))
+median_inc2 <- data.frame("year"=seq(1980,2056,1))
+
+for(dir in primary_dirs) {
+  i=0
+  sub_folders = list.files(paste(input_dir,dir,sep = "/"))
+  for(sub in sub_folders){
+    i=i+1
+    temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,sub,"ReportHIVByAgeAndGender.csv",sep="/")))
+    temp_table$Year2 <- floor((temp_table$Year-0.5))
+    temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+    trajectories_IR.1a <- aggregate(Newly.Infected ~ Year2, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+    trajectories_IR.2 <- aggregate(Uninfected.Population ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+    trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+    trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+    trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+    trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+    trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+    inc_values2$newCol1 <- trajectories_IRoverall$incidence
+    colnames(inc_values2)[ncol(inc_values2)] <- paste(sub)
+    print(paste("working on folder", dir, "sub-folder",sub,"sim",i,sep=" "))
+  }
+  median_inc2$val1=rowQuantiles(as.matrix(inc_values2[,2:ncol(inc_values2)]), probs = 0.5)
+  colnames(median_inc2)[ncol(median_inc2)] <- paste(str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][1],str_extract_all(dir,"\\(?[0-9,.]+\\)?")[[1]][2], sep=",") 
+  print(paste("working on sub-folder",dir,sep=" "))
+}
+>>>>>>> 8a1555094a698451b6685d70ba1fc9d8fab49099
+
+names(median_inc2)
+rtest <- gather(median_inc2, parameter, incidence, `0,0.0`:`60,0.2`, factor_key=TRUE)
+ARTeffect <- data.frame(within(rtest, parameter<-data.frame(do.call('rbind', strsplit(as.character(parameter), ',', fixed=TRUE)))))
+ARTeffect <- data.frame("year"=ARTeffect$year,"incidence"=ARTeffect$incidence,"timetoart"=ARTeffect$parameter[1], "artefficacy"=ARTeffect$parameter[2])
+ARTeffect$timetoart <- ARTeffect$X1
+ARTeffect$artefficacy <- ARTeffect$X2
+ARTeffect <- ARTeffect[,c(1:2,5:6)]
+summary(ARTeffect$timetoart)
+summary(ARTeffect$artefficacy)
+
+ggplot() +
+  geom_line(data=subset(ARTeffect, timetoart==180), aes(x=year, y=incidence*100, color=artefficacy),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2050), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of ART") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="ART efficacy"))+
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=3)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_acutemult_acutedur3mo.jpg", height=8, width=8)
+
+ggplot() +
+  geom_line(data=subset(ARTeffect, artefficacy==0.08), aes(x=year, y=incidence*100, color=timetoart),size=2) +
+  xlab("Year")+
+  ylab("Incidence (per 100 py)")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2050,10),limits=c(1980,2050), expand = c(0,0)) +
+  ggtitle("Sensitivity analysis of ART") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="Days from infection to treatment"))+
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  #guides(col = guide_legend(nrow=3)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
 
 
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_trends_acutedur_acutemulti26.jpg", height=8, width=8)
 
+ggplot(data=subset(acute_stage, year==2016 | year==2020 | year == 2030 | year==2050)) +
+  geom_raster(aes(y=as.numeric(as.character(acute_multi)), x=as.numeric(as.character(acute_dur)), fill=incidence*100))+ 
+  geom_point(aes(x=3, y=25), shape=3) +
+  scale_fill_gradient(name="incidence per 100 py", low="blue", high="yellow")+
+  theme(legend.position="bottom") +
+  facet_wrap(~year)+
+  xlab("acute duration") +
+  ylab("acute infectivity")+
+  theme_bw(base_size=14) +
+  guides(fill = guide_legend(keywidth = 2, keyheight = 1, nrow=1)) +
+  theme(legend.position="bottom") +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
 
+setwd("C:\\Users\\aakullian\\Documents\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("inc_raster_acute_dur_multi.jpg", height=8, width=8)
 
-
-
-
-
-
-
-
+#save incidence output so it doesn't have to be run again
+save.image(file="parameter_sweep_baseline.RData")
 
 ##################################################################################################
 #set working directories for scenarios
