@@ -12,7 +12,6 @@ library(data.table)
 library(tidyr)
 library(matrixStats)
 library(stringr)
-<<<<<<< HEAD
 
 options(scipen=999)
 
@@ -558,24 +557,24 @@ ggsave("inc_trends_granich2009_estimates.jpg", height=8, width=8)
 #ART stages in 100% ART scenario
 ##################################################################################################
 
-library(rjson)
+# library(rjson)
 
-#Read in the Accessibility_and_Risk_IP_Overlay
-
-Accessibility_and_Risk_IP_Overlay <- fromJSON(file = "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Calibration\\SeparateInput\\Accessibility_and_Risk_IP_Overlay.json")
-Accessibility_and_Risk_IP_Overlay_json <- toJSON(Accessibility_and_Risk_IP_Overlay)
-
-# Set working directories
-input_dir <- "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Calibration\\SeparateInput\\ART100pctTransmissionCounter"
-primary_dirs = list.files(input_dir)
-dir="01d11cc3-ffd6-e811-a2bd-c4346bcb1555"
-
-for(dir in primary_dirs) {
-  write(Accessibility_and_Risk_IP_Overlay_json, file = paste(input_dir,dir,"Accessibility_and_Risk_IP_Overlay.json",sep="\\"))
-}
+# #Read in the Accessibility_and_Risk_IP_Overlay
+# 
+# Accessibility_and_Risk_IP_Overlay <- fromJSON(file = "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Calibration\\SeparateInput\\Accessibility_and_Risk_IP_Overlay.json")
+# Accessibility_and_Risk_IP_Overlay_json <- toJSON(Accessibility_and_Risk_IP_Overlay)
+# 
+# # Set working directories
+# input_dir <- "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Calibration\\SeparateInput\\ART100pctTransmissionCounter"
+# primary_dirs = list.files(input_dir)
+# dir="01d11cc3-ffd6-e811-a2bd-c4346bcb1555"
+# 
+# for(dir in primary_dirs) {
+#   write(Accessibility_and_Risk_IP_Overlay_json, file = paste(input_dir,dir,"Accessibility_and_Risk_IP_Overlay.json",sep="\\"))
+# }
 
 #read in reportHIVbyageandgender files
-input_dir <- "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Baseline_transmission_ARTstate"
+input_dir <- "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Output\\Baseline_transmission_ARTstate"
 primary_dirs = list.files(input_dir)
 inc_values6 <- data.frame("Year2"=seq(1980,2056,1))
 
@@ -685,6 +684,133 @@ ggplot(data=subset(inc_values6.agg.m)) +
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
 ggsave("TransmittersByARTstate_proportions_ARTdata_baseline.jpg", height=8, width=8)
+
+options(scipen=99999)
+
+subset(inc_values6.agg.m, Year2==2030)  %>%
+  group_by(IP_Key.ARTstate_f) %>%
+  summarize(median=median(IP_Key.ARTstate_P), lb=quantile(IP_Key.ARTstate_P, p=0.025), ub=quantile(IP_Key.ARTstate_P, p=0.975))  
+
+#100% ART scenario
+
+#read in reportHIVbyageandgender files
+input_dir <- "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Output\\ART100pct_transmission_ARTstate"
+primary_dirs = list.files(input_dir)
+inc_values6 <- data.frame("Year2"=seq(1980,2056,1))
+
+i=0
+for(dir in primary_dirs) {
+  i=i+1
+  temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,"ReportHIVByAgeAndGender.csv",sep="/")))
+  temp_table$Year2 <- floor((temp_table$Year-0.5))
+  temp_table$Uninfected.Population = temp_table$Population-temp_table$Infected
+  trajectories_IR.1a <- aggregate(cbind(Newly.Infected,Transmitters) ~ Year2+IP_Key.ARTstate, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+  trajectories_IR.2 <- aggregate(cbind(Uninfected.Population,Infected,Population) ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum)
+  trajectories_IR.2$Year2 <- floor(trajectories_IR.2$Year-0.5)
+  trajectories_IR.2 <- trajectories_IR.2[!duplicated(trajectories_IR.2[c("Year2")]),] #remove second instance of duplicate rows
+  trajectories_IR.2 <- trajectories_IR.2[-match("Year",names(trajectories_IR.2))]
+  trajectories_IRoverall <- merge(trajectories_IR.1a, trajectories_IR.2, by=c("Year2"))
+  trajectories_IRoverall$incidence <- trajectories_IRoverall$Newly.Infected / trajectories_IRoverall$Uninfected.Population
+  trajectories_IRoverall$sim.id <- paste(dir)
+  if (i == 1){
+    inc_values6 <- trajectories_IRoverall
+  }
+  else{
+    inc_values6 <- rbind(inc_values6, trajectories_IRoverall)
+  }
+  print(paste("working on folder", i, dir,sep=" "))
+}
+
+head(temp_table)
+head(inc_values6,100)
+
+inc_values6.agg <- aggregate(Transmitters ~ Year2+sim.id, inc_values6, FUN=sum)
+inc_values6.agg.m <- merge(inc_values6, inc_values6.agg, by=c("Year2","sim.id"))
+inc_values6.agg.m$IP_Key.ARTstate_P <- inc_values6.agg.m$Transmitters.x / inc_values6.agg.m$Transmitters.y
+inc_values6.agg.m$IP_Key.ARTstate_INC <- inc_values6.agg.m$Transmitters.x / inc_values6.agg.m$Infected
+
+summary(inc_values6.agg.m$IP_Key.ARTstate_P)
+summary(inc_values6.agg.m$IP_Key.ARTstate_INC)
+names(inc_values6.agg.m)
+head(subset(inc_values6.agg.m[c(1,3:8,10:12)],IP_Key.ARTstate_INC>1),100)
+
+#mean value of all sims by year
+table(inc_values6.agg.m$IP_Key.ARTstate_P)
+inc_values6.agg.mean <- aggregate(IP_Key.ARTstate_P ~ IP_Key.ARTstate+Year2, inc_values6.agg.m, FUN=mean)
+head(subset(inc_values6.agg.mean, Year2==2030 | Year2==2050))
+
+table(inc_values6.agg.m$IP_Key.ARTstate)
+inc_values6.agg.m$IP_Key.ARTstate_f <- ordered(inc_values6.agg.m$IP_Key.ARTstate, levels=c("NeverOnART","OnART","OffART"))
+ggplot(data=subset(inc_values6.agg.m)) +
+  geom_line(aes(x=Year2, y=IP_Key.ARTstate_P,group=interaction(IP_Key.ARTstate_f,sim.id), color=IP_Key.ARTstate_f, alpha=0.02),size=1,alpha=0.02) +
+  geom_smooth(aes(x=Year2, y=IP_Key.ARTstate_P, color=IP_Key.ARTstate_f, group=IP_Key.ARTstate_f),method="loess", span=0.2, se=F,size=2) +
+  xlab("Year")+
+  ylab("Proportion of transmissions")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2051,10),limits=c(1980,2051), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(0,1,0.1),limits=c(0,1), expand = c(0,0)) +
+  scale_color_manual(labels = c("Never initiated ART","On ART", "Dropped out from ART"), values = c("red", "blue", "purple")) +
+  ggtitle("Transmissions by ART status of transmitter") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="ART status", nrow=1))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("TransmittersByARTstate_proportions_baseline.jpg", height=8, width=8)
+
+#art scale-up
+i=0
+for(dir in primary_dirs) {
+  i=i+1
+  temp_table <- as.data.table(read.csv(file = paste(input_dir,dir,"ReportHIVByAgeAndGender.csv",sep="/")))
+  art_temp <- aggregate(cbind(On_ART,Infected) ~ Year, subset(temp_table, Age>10 & Age<50), FUN=sum) #sums number of new infections in each year
+  art_temp$ARTcoverage <- art_temp$On_ART / art_temp$Infected
+  art_temp$sim.id <- paste(dir)
+  if (i == 1){
+    art_values1 <- art_temp
+  }
+  else{
+    art_values1 <- rbind(art_values1, art_temp)
+  }
+  print(paste("working on folder", i, dir,sep=" "))
+}
+
+head(art_values1)
+
+ggplot(data=subset(inc_values6.agg.m)) +
+  geom_line(aes(x=Year2, y=IP_Key.ARTstate_P,group=interaction(IP_Key.ARTstate_f,sim.id), color=IP_Key.ARTstate_f, alpha=0.02),size=1,alpha=0.02) +
+  geom_smooth(aes(x=Year2, y=IP_Key.ARTstate_P, color=IP_Key.ARTstate_f, group=IP_Key.ARTstate_f),method="loess", span=0.2, se=F,size=2) +
+  geom_smooth(data=art_values1, aes(x=Year, y=ARTcoverage, color="black"),method="loess", color="black", span=0.2, se=F,size=1,linetype=2) +
+  xlab("Year")+
+  ylab("Proportion of transmissions")+
+  theme_bw(base_size=16) +
+  scale_x_continuous(breaks = seq(1980,2051,10),limits=c(1980,2051), expand = c(0,0)) +
+  scale_y_continuous(breaks = seq(0,1,0.1),limits=c(0,1), expand = c(0,0)) +
+  scale_color_manual(labels = c("Never initiated ART","On ART", "Dropped out from ART", "ART coverage"), values = c("red", "blue", "purple","black")) +
+  ggtitle("Transmissions by ART status of transmitter") +
+  theme(legend.position="bottom") +
+  guides(color=guide_legend(title="ART status", nrow=1))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(strip.background = element_rect(colour="black", fill="white")) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black"))
+
+setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\LancetHIVParameterSweeps\\Figures")
+ggsave("TransmittersByARTstate_proportions_ARTdata_baseline.jpg", height=8, width=8)
+
+options(scipen=99999)
+
+subset(inc_values6.agg.m, Year2==2030)  %>%
+  group_by(IP_Key.ARTstate_f) %>%
+  summarize(median=median(IP_Key.ARTstate_P), lb=quantile(IP_Key.ARTstate_P, p=0.025), ub=quantile(IP_Key.ARTstate_P, p=0.975))  
+
 #################################################################################################
 #Bring in Transmission data
 #################################################################################################
@@ -819,6 +945,15 @@ loess <- loess(p.transmission ~ year.fl, subset(transmissions.acute.early, SRC_G
 predict(loess, data.frame(year.fl = 2030, se = F))
 loess <- loess(p.transmission ~ year.fl, subset(transmissions.acute.early, SRC_GENDER==1 & stage=="early"), span=0.3)
 predict(loess, data.frame(year.fl = 2030, se = F))
+
+subset(transmissions.acute.early, year.fl==2030 & stage=="acute")  %>%
+  group_by(SRC_GENDER) %>%
+  summarize(median=median(p.transmission), lb=quantile(p.transmission, p=0.025), ub=quantile(p.transmission, p=0.975))  
+
+subset(transmissions.acute.early, year.fl==2030 & stage=="early")  %>%
+  group_by(SRC_GENDER) %>%
+  summarize(median=median(p.transmission), lb=quantile(p.transmission, p=0.025), ub=quantile(p.transmission, p=0.975))  
+
 
 ###########################################################################################################
 #Transmission pair formation
@@ -1967,6 +2102,10 @@ swaziland.inc
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
 ggsave("swaziland.incidence.bygender_andoverall.calib_FINAL.png", height=5, width=12)
+
+
+
+
 
 ###########################################
 #Incidence scenarios by gender
@@ -3432,7 +3571,6 @@ results.final.incidence.age.gender$horizon <- paste0(results.final.incidence.age
                                                      results.final.incidence.age.gender$endyear)
 table(results.final.incidence.age.gender$horizon)
 
-
 labs.scenario <- c("909090"="Age-targeted 909090 (Scenario 4)", "ART100pct"="100% ART (Scenario 5)")
 
 ggplot(data=subset(results.final.incidence.age.gender, horizon!="2010-2016")) +
@@ -3455,6 +3593,9 @@ ggplot(data=subset(results.final.incidence.age.gender, horizon!="2010-2016")) +
 
 setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\Manuscripts\\Ongoing Manuscripts Folder\\BMGF Lancet Paper\\Revised_Plots")
 ggsave("cumulativeindcidencebyageandgender.png", height=10, width=8)
+
+#get values
+subset(results.final.incidence.age.gender, horizon!="2010-2016")
 
 ##########################################################################
 #reduction in cumulative incidence
