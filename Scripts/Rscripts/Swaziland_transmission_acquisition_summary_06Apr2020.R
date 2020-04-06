@@ -184,7 +184,7 @@ network.data.m <- data.frame("sim.id"=network.data$sim.id, "src"=network.data$SR
                            "transm.year.int"=floor(network.data$Year2),
                            "acq.year"=network.data$acq.year,
                            "transm.year.cat"=network.data$yearcat3,
-                            "src.stage"=network.data$SRC_STAGE,
+                           "src.stage"=network.data$SRC_STAGE,
                            "scenario"=network.data$scenario,
                            "AgeCat"=network.data$AgeCat)
 names(network.data.m)
