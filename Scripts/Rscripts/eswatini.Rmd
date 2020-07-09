@@ -1,6 +1,6 @@
 ---
 title: "Transmission dynamics in the era of test and treat" 
-author: "Adam Akullian"
+author: "Adam Akullian and Josh Herbeck"
 date: "`r Sys.Date()`"
 output: 
   html_document:
