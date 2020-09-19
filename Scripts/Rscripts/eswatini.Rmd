@@ -16,13 +16,14 @@ output:
 ---
 ## Project description
 We used output from a stochastic agent-based epidemic model calibrated to the HIV epidemic in the Kingdom of Eswatini (formerly Swaziland) to estimate the number and relative frequency of secondary infections caused by HIV infected individuals according to age group, sex, stage of infection (acute, early, latent, AIDS), and ART status. We estimated changes in the contribution of these sources to the epidemic over the previous and next thirty years, under multiple ART-defined scenarios (e.g. pre-ART, ART, ART scale up, status-quo ART coverage (current 90-90-90 targets), and increasing levels of UTT near-perfect ART initiation
+
 Documentation on all model parameters: https://idmod.org/docs/hiv/software-report-transmission.html?searchText=TransmissionReport
 
 # Setup
 ```{r setup, message = FALSE}
 require("knitr")
 knitr::opts_chunk$set(echo = TRUE, fig.align='center')
-opts_knit$set(root.dir = "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Output\\")
+#opts_knit$set(root.dir = "C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Output\\")
 
 library(kableExtra)
 library(tidyverse)
@@ -40,11 +41,17 @@ numCores <- detectCores()
 #source("../Scripts/model_helper_functions.R")
 
 ## Load output from EMOD
-setwd("C:\\Users\\aakullian\\Dropbox (IDM)\\GitHub\\EMOD_eswatini\\Output")
-load(file = "inputfiles2.rda") #brings in transmissionreport.csv and reporthivbyageandgender.csv
+
+data_dir <- "~/Dropbox/IDM_stuff/EMOD_eswatini" 
+
+load(file.path(data_dir,"/InputFiles/inputfiles2.rda")) 
+#brings in transmissionreport.csv and reporthivbyageandgender.csv
 
 #create "date of acquisition" variable as date when the dest_ID acquired HIV (whether or not there was a subsequent transmission)
 date.of.acquisition <- data.frame("SRC_ID"=transmissionreport$DEST_ID, "acq.year"=transmissionreport$YEAR, "sim.id"=transmissionreport$sim.id, "scenario"=transmissionreport$scenario) #source id used to merge in with source of transmitters
+
+#JH:  Why merge on SRC_ID and not DEST_ID?
+
 network.data <- left_join(transmissionreport, date.of.acquisition, by=c("SRC_ID","sim.id","scenario")) #join to include date of acquisition
 
 network.data.m <- network.data %>%    
@@ -57,6 +64,7 @@ network.data.m <- network.data %>%
   mutate(era = case_when(Year2 < 2016 ~ "Pre-UTT", TRUE ~ "UTT era")) %>% mutate(Year= Year2) %>%
   mutate(src.stage.f = factor(SRC_STAGE, levels = c(1,2,3,4), labels = c("Acute","Latent","AIDS","on ART"))) %>%
   dplyr::select(-c(SRC_STAGE, Year2)) 
+
 network.data.m$scenario = factor(network.data.m$scenario, levels=c('baseline','ART100pct'))
 table(network.data.m$scenario)
 ```
@@ -139,13 +147,14 @@ reportHIV.vars <- kable(
 ```
 
 ## Contribution to incidence over time by stage of infection and age at transmission
-The composition of prevalent HIV infections (stage of infection) changes over time as the epidemic matures and interventions scale. Initially, most infections were caused by acutely infected individuals and infections from high-risk groups.  Over time, infections accumulated in the latent stages and shifted to lower-risk, community-level transmission.  ART scale-up directly reduced the contribution to incidence from those with untreated latent stage infection and untreated AIDS. Incidence attributed to transmission from acutely infected PLHIV also declined in the ART era primarily from the indirect effects of fewer new infections (and thus a lower prevalence of acutely infected individuals) – not from directly suppressing individuals in the acute stage.  Transmissions from PLHIV in the acute stage accounted for 10% of total incidence (<0.5 infections per 100 py) prior to ART scale-up.  After UTT, incidence attributed to PLHIV in the acute stage declined to 0.25 per 100 py, though made up a larger overall proportion of the total incidence (15%).  
+The composition of prevalent HIV infections (stage of infection) changes over time as the epidemic matures and interventions scale. Initially, most infections were caused by acutely infected individuals and infections from high-risk groups. Over time, infections accumulated in the latent stages and shifted to lower-risk, community-level transmission. ART scale-up directly reduced the contribution to incidence from those with untreated latent stage infection and untreated AIDS. Incidence attributed to transmission from acutely infected PLHIV also declined in the ART era primarily from the indirect effects of fewer new infections (and thus a lower prevalence of acutely infected individuals) – not from directly suppressing individuals in the acute stage. Transmissions from PLHIV in the acute stage accounted for 10% of total incidence (<0.5 infections per 100 py) prior to ART scale-up.  After UTT, incidence attributed to PLHIV in the acute stage declined to 0.25 per 100 py, though made up a larger overall proportion of the total incidence (15%).
+
 
 ```{r, echo = FALSE, fig.width=10, fig.height=7}
 labs <- c("1" = "Women", "0" = "Men")
 labs.age <- c("[15,25)"="15-24","[25,35)"="25-34","[35,200)"="35+")
 
-#stage
+#source HIV stage
 t1 <- network.data.m  %>%
   group_by(scenario, sim.id, Year, src.stage.f) %>%
   summarize(transmissions=n()) 
@@ -159,9 +168,9 @@ ttable <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T) %>%
   group_by(scenario, Year, src.stage.f) %>%
   summarize(prop.med=median(freq), prop.lb = quantile(freq, probs = 0.025), prop.ub = quantile(freq, probs = 0.975), inc.med=median(inc), inc.lb = quantile(inc, probs = 0.025), inc.ub = quantile(inc, probs = 0.975)) 
 
-#age
+#source age and source gender
 t1 <- network.data.m  %>%
-  group_by(scenario, sim.id, Year,SRC_GENDER, src.age.cat3) %>%
+  group_by(scenario, sim.id, Year, SRC_GENDER, src.age.cat3) %>%
   summarize(transmissions=n()) 
 r1 <- subset(reporthivbyageandgender)  %>%
   group_by(scenario, sim.id, Year) %>%
@@ -170,7 +179,21 @@ ttable.age <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T) %>%
   mutate(inc = transmissions/Uninfected.Population) %>%
   group_by(scenario, Year, sim.id) %>%
   mutate(freq = transmissions / sum(transmissions)) %>%
-  group_by(scenario, Year,SRC_GENDER, src.age.cat3) %>%
+  group_by(scenario, Year, SRC_GENDER, src.age.cat3) %>%
+  summarize(prop.med=median(freq), prop.lb = quantile(freq, probs = 0.025), prop.ub = quantile(freq, probs = 0.975), inc.med=median(inc), inc.lb = quantile(inc, probs = 0.025), inc.ub = quantile(inc, probs = 0.975)) 
+
+#recipient/destination gender
+t1 <- network.data.m  %>%
+  group_by(scenario, sim.id, Year, DEST_GENDER, dest.age.cat) %>%
+  summarize(transmissions=n()) 
+r1 <- subset(reporthivbyageandgender)  %>%
+  group_by(scenario, sim.id, Year) %>%
+  summarize(Uninfected.Population=sum(Uninfected.Population)) 
+ttable.dest.gender <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T) %>%
+  mutate(inc = transmissions/Uninfected.Population) %>%
+  group_by(scenario, Year, sim.id) %>%
+  mutate(freq = transmissions / sum(transmissions)) %>%
+  group_by(scenario, Year, DEST_GENDER, dest.age.cat) %>%
   summarize(prop.med=median(freq), prop.lb = quantile(freq, probs = 0.025), prop.ub = quantile(freq, probs = 0.975), inc.med=median(inc), inc.lb = quantile(inc, probs = 0.025), inc.ub = quantile(inc, probs = 0.975)) 
 
 #Incidence contribution (absolute) by HIV stage
