@@ -56,6 +56,7 @@ network.data <- left_join(transmissionreport, date.of.acquisition, by=c("SRC_ID"
 
 network.data.m <- network.data %>%    
   mutate(src.age.cat = cut(src_age_int, c(15,20,25,30,35,40,45,50,55,60,200), right=F)) %>%
+  #creates age bins, e.g (15,16,17,18,19) = [15,20)
   mutate(dest.age.cat = cut(dest_age_int, c(15,20,25,30,35,40,45,50,55,60,200), right=F)) %>%
   mutate(src.age.cat3 = cut(src_age_int, c(15,25,35,200), right=F)) %>%
   mutate(dest.age.cat3 = cut(dest_age_int, c(15,25,35,200), right=F)) %>%
@@ -182,19 +183,37 @@ ttable.age <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T) %>%
   group_by(scenario, Year, SRC_GENDER, src.age.cat3) %>%
   summarize(prop.med=median(freq), prop.lb = quantile(freq, probs = 0.025), prop.ub = quantile(freq, probs = 0.975), inc.med=median(inc), inc.lb = quantile(inc, probs = 0.025), inc.ub = quantile(inc, probs = 0.975)) 
 
-#recipient/destination gender
+# for Jeff E. and HIV Modeling Consortium
+# number of infections by recipient/destination gender 
 t1 <- network.data.m  %>%
   group_by(scenario, sim.id, Year, DEST_GENDER, dest.age.cat) %>%
   summarize(transmissions=n()) 
 r1 <- subset(reporthivbyageandgender)  %>%
   group_by(scenario, sim.id, Year) %>%
-  summarize(Uninfected.Population=sum(Uninfected.Population)) 
+  summarize(Uninfected.Population=sum(Uninfected.Population))
+
+#merge t1 and r1 to get age, gender, Year, transmissions, uninfected.population
+t.dest.gender <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T)
+t.dest.gender <- subset(t.dest.gender, scenario =="baseline")
+t.dest.gender <- subset(t.dest.gender, Year > 1999 & Year < 2026)
+t.dest.gender <- t.dest.gender  %>%
+  group_by(scenario, sim.id, Year, DEST_GENDER, dest.age.cat) %>%
+  summarize(transmissions=n()) 
+
+
+
+
 ttable.dest.gender <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T) %>%
   mutate(inc = transmissions/Uninfected.Population) %>%
   group_by(scenario, Year, sim.id) %>%
   mutate(freq = transmissions / sum(transmissions)) %>%
   group_by(scenario, Year, DEST_GENDER, dest.age.cat) %>%
   summarize(prop.med=median(freq), prop.lb = quantile(freq, probs = 0.025), prop.ub = quantile(freq, probs = 0.975), inc.med=median(inc), inc.lb = quantile(inc, probs = 0.025), inc.ub = quantile(inc, probs = 0.975)) 
+
+ttable.dest.gender$scenario <- NULL
+
+write.table(ttable.dest.gender, file="output.1")
+
 
 #Incidence contribution (absolute) by HIV stage
 
