@@ -185,34 +185,25 @@ ttable.age <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T) %>%
 
 # for Jeff E. and HIV Modeling Consortium
 # number of infections by recipient/destination gender 
+# need to sum across all sim.ids per Year and for each Gender and age category
 t1 <- network.data.m  %>%
   group_by(scenario, sim.id, Year, DEST_GENDER, dest.age.cat) %>%
   summarize(transmissions=n()) 
 r1 <- subset(reporthivbyageandgender)  %>%
   group_by(scenario, sim.id, Year) %>%
   summarize(Uninfected.Population=sum(Uninfected.Population))
+ttable.dest.gender <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T) %>%
+  #mutate(inc = transmissions/Uninfected.Population) %>%
+  group_by(scenario, Year, sim.id) %>%
+  mutate(trans = transmissions) %>%
+  group_by(scenario, Year, DEST_GENDER, dest.age.cat) %>%
+  summarize(prop.med=median(trans), prop.lb = quantile(trans, probs = 0.025), prop.ub = quantile(trans, probs = 0.975)) 
 
 #merge t1 and r1 to get age, gender, Year, transmissions, uninfected.population
-t.dest.gender <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T)
-t.dest.gender <- subset(t.dest.gender, scenario =="baseline")
-t.dest.gender <- subset(t.dest.gender, Year > 1999 & Year < 2026)
-t.dest.gender <- t.dest.gender  %>%
-  group_by(scenario, sim.id, Year, DEST_GENDER, dest.age.cat) %>%
-  summarize(transmissions=n()) 
+ttable.dest.gender <- subset(ttable.dest.gender, scenario =="baseline")
+ttable.dest.gender <- subset(ttable.dest.gender, Year > 1999 & Year < 2026)
 
-
-
-
-ttable.dest.gender <- merge(t1, r1, by=c("scenario","Year","sim.id"), all.x=T) %>%
-  mutate(inc = transmissions/Uninfected.Population) %>%
-  group_by(scenario, Year, sim.id) %>%
-  mutate(freq = transmissions / sum(transmissions)) %>%
-  group_by(scenario, Year, DEST_GENDER, dest.age.cat) %>%
-  summarize(prop.med=median(freq), prop.lb = quantile(freq, probs = 0.025), prop.ub = quantile(freq, probs = 0.975), inc.med=median(inc), inc.lb = quantile(inc, probs = 0.025), inc.ub = quantile(inc, probs = 0.975)) 
-
-ttable.dest.gender$scenario <- NULL
-
-write.table(ttable.dest.gender, file="output.1")
+write.table(ttable.dest.gender, file="output.ttable.dest.gender.txt")
 
 
 #Incidence contribution (absolute) by HIV stage
